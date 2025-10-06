@@ -1,0 +1,526 @@
+/* South Page Styles - Compact Design */
+.south-page {
+  padding: 15px;
+}
+
+.south-devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+/* Compact South Device Card */
+.south-device-card {
+  background: white;
+  border-radius: 6px;
+  padding: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border-left: 3px solid var(--primary-color);
+  transition: all 0.2s ease;
+  height: fit-content;
+}
+
+.south-device-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+.device-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.device-icon {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.device-icon i {
+  font-size: 1.2rem;
+  color: white;
+}
+
+.device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 2px 0;
+  color: var(--dark-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-protocol {
+  font-size: 0.8rem;
+  color: var(--gray-color);
+  margin: 0;
+  font-weight: 500;
+}
+
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.status-connected {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.status-disconnected {
+  background-color: #6c757d;
+  color: white;
+}
+
+.status-error {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.device-card-body {
+  margin-bottom: 15px;
+}
+
+.device-detail {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  padding: 4px 0;
+}
+
+.device-detail:last-child {
+  margin-bottom: 0;
+}
+
+.device-detail label {
+  font-weight: 500;
+  color: var(--dark-color);
+  flex-shrink: 0;
+}
+
+.device-detail span {
+  color: var(--gray-color);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: 10px;
+}
+
+.device-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Compact South Config Form */
+.south-config-page {
+  padding: 15px;
+}
+
+.south-config-form {
+  background: white;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.form-section {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.form-section h3 {
+  font-size: 1rem;
+  color: var(--dark-color);
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.form-section h3::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--primary-color);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: var(--dark-color);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group input,
+.form-group select {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+/* Compact JSON Display */
+.config-json {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.3;
+}
+
+/* Compact Form Actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+/* Compact Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #5a6268;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Compact Loading State */
+.loading-state {
+  text-align: center;
+  padding: 40px 15px;
+  color: var(--gray-color);
+}
+
+.loading-state i {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.loading-state p {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Page Title Compact */
+.south-page .page-title,
+.south-config-page .page-title {
+  margin-bottom: 15px;
+}
+
+.south-page .page-title h1,
+.south-config-page .page-title h1 {
+  font-size: 1.4rem;
+  margin-bottom: 5px;
+}
+
+.south-page .page-title p,
+.south-config-page .page-title p {
+  font-size: 0.85rem;
+  color: var(--gray-color);
+}
+
+/* Form Group Compact Variations */
+.form-group.compact {
+  margin-bottom: 0;
+}
+
+.form-group.compact label {
+  margin-bottom: 3px;
+}
+
+.form-group.compact input,
+.form-group.compact select {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
+/* Protocol Specific Styling */
+.protocol-config-section {
+  background: #fafbfc;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 1px solid #e9ecef;
+}
+
+.protocol-config-section h3 {
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  color: var(--primary-color);
+}
+
+.protocol-config-section h3::before {
+  background: var(--success-color);
+}
+
+/* Enhanced Select Styling */
+.form-group select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 25px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+/* Number Input Styling */
+.form-group input[type="number"] {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+/* Checkbox Styling */
+.form-group.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-group.checkbox label {
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: normal;
+}
+
+.form-group.checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .south-page {
+    padding: 10px;
+  }
+  
+  .south-devices-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .south-config-form {
+    padding: 15px;
+  }
+  
+  .device-card-header {
+    flex-wrap: wrap;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .btn {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .south-device-card {
+    padding: 12px;
+  }
+  
+  .south-config-form {
+    padding: 12px;
+  }
+  
+  .form-section {
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+  }
+  
+  .device-detail {
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .device-detail span {
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
+/* Animation for smooth transitions */
+.south-device-card,
+.form-group input,
+.form-group select,
+.btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus states for accessibility */
+.form-group input:focus-visible,
+.form-group select:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Compact status indicators */
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-indicator.connected {
+  background-color: var(--success-color);
+}
+
+.status-indicator.disconnected {
+  background-color: #6c757d;
+}
+
+.status-indicator.error {
+  background-color: var(--danger-color);
+}
+
+/* Tooltip for truncated text */
+.device-name[title],
+.device-detail span[title] {
+  cursor: help;
+}
+
+/* Compact scrollbars */
+.config-json::-webkit-scrollbar {
+  width: 6px;
+}
+
+.config-json::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.config-json::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.config-json::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

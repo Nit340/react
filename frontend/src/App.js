@@ -24,10 +24,12 @@ import IotGateway from './pages/settings/IotGateway';
 import Device from './pages/settings/Device';
 import Help from './pages/Help';
 import South from './pages/South/South';
+import SouthConfig from './pages/South/SouthConfig';
 // Styles
 import './App.css';
 import './CSS/Dashboard.css';
 import './CSS/South.css';
+import './CSS/SouthConfig.css';
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
@@ -60,6 +62,7 @@ function App() {
             <Route path="/settings/device" element={<Device />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/south/config" element={<SouthConfig />} /> {/* Add this route */}
           </Routes>
         </div>
       </div>

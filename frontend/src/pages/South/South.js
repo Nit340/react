@@ -4,46 +4,35 @@ import { useNavigate } from 'react-router-dom';
 const South = () => {
   const [craneConfig, setCraneConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchCraneConfig();
   }, []);
 
-  const fetchCraneConfig = async () => {
-    try {
-      setLoading(true);
-      // Simulate API call - replace with actual backend
-      setTimeout(() => {
-        const defaultConfig = {
-          deviceId: 'crane-001',
-          name: 'Main Crane',
-          protocol: 'modbus',
-          status: 'disconnected',
-          endpoint: '192.168.1.100',
-          port: 502,
-          pollingInterval: 30,
-          timeout: 10,
-          retryCount: 3,
-          modbusConfig: {
-            unitId: 1,
-            functionCode: 3,
-            startingAddress: 0,
-            quantity: 10,
-            byteOrder: 'big_endian'
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        setCraneConfig(defaultConfig);
-        setLoading(false);
-      }, 500);
-    } catch (error) {
-      console.error('Failed to fetch crane config:', error);
-      setLoading(false);
+ const fetchCraneConfig = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    // Use the service name instead of localhost
+    const response = await fetch('http://localhost:8000/api/crane/config/');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  };
-
+    
+    const configData = await response.json();
+    setCraneConfig(configData);
+    
+  } catch (error) {
+    console.error('Failed to fetch crane config:', error);
+    setError(error.message);
+  } finally {
+    setLoading(false);
+  }
+};
   const handleConfigure = () => {
     navigate('/south/config');
   };
@@ -71,8 +60,35 @@ const South = () => {
           <p>Loading crane configuration...</p>
         </div>
         <div className="loading-state">
-          <i className="fas fa-spinner fa-spin"></i>
-          <p>Loading...</p>
+          <div className="spinner"></div>
+          <p>Connecting to server...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="south-page">
+        <div className="page-title">
+          <h1>South Devices</h1>
+          <p>Connection Error</p>
+        </div>
+        <div className="error-state">
+          <div className="error-icon">⚠️</div>
+          <h3>Server Connection Failed</h3>
+          <p>{error}</p>
+          <div className="troubleshooting">
+            <p><strong>To fix this:</strong></p>
+            <ol>
+              <li>Make sure Flask server is running</li>
+              <li>Check if port 5001 is available</li>
+              <li>Verify no firewall is blocking the connection</li>
+            </ol>
+          </div>
+          <button className="btn btn-primary" onClick={fetchCraneConfig}>
+            Retry Connection
+          </button>
         </div>
       </div>
     );
@@ -88,9 +104,7 @@ const South = () => {
       <div className="south-devices-grid">
         <div className="south-device-card">
           <div className="device-card-header">
-            <div className="device-icon">
-              <i className="fas fa-crane"></i>
-            </div>
+            <div className="device-icon">🏗️</div>
             <div className="device-info">
               <h3 className="device-name" title={craneConfig.name}>
                 {craneConfig.name}
@@ -124,8 +138,7 @@ const South = () => {
               className="btn btn-primary"
               onClick={handleConfigure}
             >
-              <i className="fas fa-cog"></i>
-              Configure
+              ⚙️ Configure
             </button>
           </div>
         </div>

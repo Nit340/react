@@ -1,0 +1,283 @@
+/* CSS/OperationsLog.css */
+
+/* Compact Metrics Dashboard */
+.metrics-dashboard {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    background-color: #fefefe;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 12px;
+}
+
+.metric-card {
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 10px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+}
+
+/* Color borders for each metric */
+.metric-card:nth-child(1) { border-left-color: #28a745; } /* Hoist */
+.metric-card:nth-child(2) { border-left-color: #007bff; } /* CT */
+.metric-card:nth-child(3) { border-left-color: #ffc107; } /* LT */
+.metric-card:nth-child(4) { border-left-color: #6c757d; } /* Switch */
+.metric-card:nth-child(5) { border-left-color: #17a2b8; } /* Duration */
+.metric-card:nth-child(6) { border-left-color: #6610f2; } /* Load */
+
+.metric-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.metric-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--gray-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metric-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.6rem;
+    margin-right: 5px;
+}
+
+.metric-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--dark-color);
+    margin-bottom: 2px;
+}
+
+.metric-details {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 0.65rem;
+}
+
+.metric-detail {
+    text-align: center;
+    flex: 1;
+    padding: 0 2px;
+}
+
+.detail-value {
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.detail-label {
+    color: var(--gray-color);
+    font-size: 0.6rem;
+}
+
+/* Icon colors */
+.icon-hoist {
+    background-color: #28a745;
+}
+
+.icon-lower {
+    background-color: #007bff;
+}
+
+.icon-travel {
+    background-color: #ffc107;
+}
+
+.icon-switch {
+    background-color: #6c757d;
+}
+
+.icon-total {
+    background-color: var(--primary-color);
+}
+
+.icon-duration {
+    background-color: #17a2b8;
+}
+
+.icon-load {
+    background-color: #6610f2;
+}
+
+/* Filter Controls */
+.log-controls {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 20px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.filter-group {
+    margin-bottom: 0;
+}
+
+.filter-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.filter-select, .filter-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    align-self: flex-end;
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-secondary {
+    background-color: white;
+    color: var(--dark-color);
+    border: 1px solid #ddd;
+}
+
+/* Operations Log Table */
+.log-table-container {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.log-table th {
+    text-align: left;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: var(--dark-color);
+    border-bottom: 2px solid #eee;
+    position: sticky;
+    top: 0;
+}
+
+.log-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.log-table tr:last-child td {
+    border-bottom: none;
+}
+
+.log-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.operation-type {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.type-hoist-up {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.type-hoist-down {
+    background-color: #c3e6cb;
+    color: #0c4128;
+}
+
+.type-ct-left {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.type-ct-right {
+    background-color: #b8daff;
+    color: #002752;
+}
+
+.type-lt-forward {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.type-lt-reverse {
+    background-color: #ffeeba;
+    color: #6c5400;
+}
+
+.type-switch {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .metrics-dashboard {
+        flex-direction: column;
+    }
+    
+    .metric-card {
+        border-right: none;
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
+    }
+    
+    .metric-card:last-child {
+        border-bottom: none;
+    }
+    
+    .log-controls {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons {
+        grid-column: 1;
+    }
+}

@@ -32,6 +32,9 @@ import './CSS/South.css';
 import './CSS/SouthConfig.css';
 import './CSS/OperationsLog.css';
 import './CSS/Filter.css';
+import './CSS/EnergyMonitoring.css';
+// In App.js, add this import with the others
+import './CSS/Load.css';
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 

@@ -6,9 +6,9 @@ const SouthConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [apiResponse, setApiResponse] = useState(null); // Store full API response
   const navigate = useNavigate();
 
-  // Get API URL from environment variables
   const API_BASE_URL = 'http://localhost:8000';
 
   useEffect(() => {
@@ -20,13 +20,12 @@ const SouthConfig = () => {
       setLoading(true);
       setError(null);
       
-      console.log(`🔍 Fetching config from: ${API_BASE_URL}/api/crane/config/`);
+      console.log(`🔍 Fetching config from: ${API_BASE_URL}/api/proxy/config`);
       
-      // Create a more detailed fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(`${API_BASE_URL}/api/crane/config/`, {
+      const response = await fetch(`${API_BASE_URL}/api/proxy/config`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -38,7 +37,6 @@ const SouthConfig = () => {
       
       console.log(`Response status: ${response.status}`);
       console.log(`Response status text: ${response.statusText}`);
-      console.log(`Response headers:`, [...response.headers.entries()]);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -46,9 +44,17 @@ const SouthConfig = () => {
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
-      const configData = await response.json();
-      console.log('📦 Received config:', configData);
-      setConfig(configData);
+      const result = await response.json();
+      console.log('📦 Full API response:', result);
+      setApiResponse(result); // Store the full response
+      
+      // Extract the actual config data
+      if (result.success && result.data) {
+        console.log('✅ Using config data from response:', result.data);
+        setConfig(result.data);
+      } else {
+        throw new Error('Invalid response format: missing data property');
+      }
       
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -90,6 +96,8 @@ const SouthConfig = () => {
 
   const handleInputChange = (path, value) => {
     setConfig(prevConfig => {
+      if (!prevConfig) return prevConfig;
+      
       const newConfig = JSON.parse(JSON.stringify(prevConfig));
       
       if (path.includes('.')) {
@@ -97,6 +105,7 @@ const SouthConfig = () => {
         const keys = path.split('.');
         let current = newConfig;
         for (let i = 0; i < keys.length - 1; i++) {
+          if (!current[keys[i]]) current[keys[i]] = {};
           current = current[keys[i]];
         }
         current[keys[keys.length - 1]] = value;
@@ -114,13 +123,17 @@ const SouthConfig = () => {
       setSaving(true);
       setError(null);
       
+      if (!config) {
+        throw new Error('No configuration data to save');
+      }
+      
       console.log('💾 Saving config:', config);
-      console.log('Sending POST request to:', `${API_BASE_URL}/api/crane/config/`);
+      console.log('Sending POST request to:', `${API_BASE_URL}/api/proxy/config/update`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(`${API_BASE_URL}/api/crane/config/`, {
+      const response = await fetch(`${API_BASE_URL}/api/proxy/config/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,8 +148,6 @@ const SouthConfig = () => {
       clearTimeout(timeoutId);
       
       console.log(`Save response status: ${response.status}`);
-      console.log(`Save response status text: ${response.statusText}`);
-      console.log(`Save response headers:`, [...response.headers.entries()]);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -144,8 +155,8 @@ const SouthConfig = () => {
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
-      const savedConfig = await response.json();
-      console.log('✅ Config saved successfully:', savedConfig);
+      const savedResult = await response.json();
+      console.log('✅ Save successful:', savedResult);
       
       alert('Configuration saved successfully!');
       navigate('/south');
@@ -182,7 +193,7 @@ const SouthConfig = () => {
             <div className="spinner"></div>
             <p>Loading configuration...</p>
           </div>
-          <p className="api-info">API URL: {API_BASE_URL}/api/crane/config/</p>
+          <p className="api-info">API URL: {API_BASE_URL}/api/proxy/config</p>
         </div>
       </div>
     );
@@ -220,6 +231,11 @@ const SouthConfig = () => {
           {config.updatedAt && (
             <p className="config-info">
               Last updated: {new Date(config.updatedAt).toLocaleString()}
+            </p>
+          )}
+          {apiResponse && (
+            <p className="config-source">
+              Source: {apiResponse.source} • {apiResponse.message}
             </p>
           )}
         </div>
@@ -367,97 +383,99 @@ const SouthConfig = () => {
         </div>
 
         {/* Modbus Configuration */}
-        <div className="config-section">
-          <div className="section-header">
-            <h2>Modbus Configuration</h2>
+        {config.modbusConfig && (
+          <div className="config-section">
+            <div className="section-header">
+              <h2>Modbus Configuration</h2>
+            </div>
+            <div className="form-grid">
+              <div className="form-field">
+                <label htmlFor="unitId">Unit ID</label>
+                <input
+                  id="unitId"
+                  type="number"
+                  value={config.modbusConfig.unitId || 1}
+                  onChange={(e) => handleInputChange('modbusConfig.unitId', parseInt(e.target.value) || 1)}
+                  min="1"
+                  max="247"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="functionCode">Function Code</label>
+                <select
+                  id="functionCode"
+                  value={config.modbusConfig.functionCode || 3}
+                  onChange={(e) => handleInputChange('modbusConfig.functionCode', parseInt(e.target.value))}
+                  className="form-select"
+                >
+                  <option value={1}>01 - Read Coils</option>
+                  <option value={2}>02 - Read Discrete Inputs</option>
+                  <option value={3}>03 - Read Holding Registers</option>
+                  <option value={4}>04 - Read Input Registers</option>
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="startingAddress">Starting Address</label>
+                <input
+                  id="startingAddress"
+                  type="number"
+                  value={config.modbusConfig.startingAddress || 0}
+                  onChange={(e) => handleInputChange('modbusConfig.startingAddress', parseInt(e.target.value) || 0)}
+                  min="0"
+                  max="65535"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="quantity">Quantity</label>
+                <input
+                  id="quantity"
+                  type="number"
+                  value={config.modbusConfig.quantity || 10}
+                  onChange={(e) => handleInputChange('modbusConfig.quantity', parseInt(e.target.value) || 10)}
+                  min="1"
+                  max="125"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="byteOrder">Byte Order</label>
+                <select
+                  id="byteOrder"
+                  value={config.modbusConfig.byteOrder || 'big_endian'}
+                  onChange={(e) => handleInputChange('modbusConfig.byteOrder', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="big_endian">Big Endian</option>
+                  <option value="little_endian">Little Endian</option>
+                  <option value="big_endian_byte_swap">Big Endian Byte Swap</option>
+                  <option value="little_endian_byte_swap">Little Endian Byte Swap</option>
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="dataType">Data Type</label>
+                <select
+                  id="dataType"
+                  value={config.modbusConfig.dataType || 'uint16'}
+                  onChange={(e) => handleInputChange('modbusConfig.dataType', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="uint16">UInt16</option>
+                  <option value="int16">Int16</option>
+                  <option value="uint32">UInt32</option>
+                  <option value="int32">Int32</option>
+                  <option value="float">Float</option>
+                </select>
+              </div>
+            </div>
           </div>
-          <div className="form-grid">
-            <div className="form-field">
-              <label htmlFor="unitId">Unit ID</label>
-              <input
-                id="unitId"
-                type="number"
-                value={config.modbusConfig?.unitId || 1}
-                onChange={(e) => handleInputChange('modbusConfig.unitId', parseInt(e.target.value) || 1)}
-                min="1"
-                max="247"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="functionCode">Function Code</label>
-              <select
-                id="functionCode"
-                value={config.modbusConfig?.functionCode || 3}
-                onChange={(e) => handleInputChange('modbusConfig.functionCode', parseInt(e.target.value))}
-                className="form-select"
-              >
-                <option value={1}>01 - Read Coils</option>
-                <option value={2}>02 - Read Discrete Inputs</option>
-                <option value={3}>03 - Read Holding Registers</option>
-                <option value={4}>04 - Read Input Registers</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="startingAddress">Starting Address</label>
-              <input
-                id="startingAddress"
-                type="number"
-                value={config.modbusConfig?.startingAddress || 0}
-                onChange={(e) => handleInputChange('modbusConfig.startingAddress', parseInt(e.target.value) || 0)}
-                min="0"
-                max="65535"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="quantity">Quantity</label>
-              <input
-                id="quantity"
-                type="number"
-                value={config.modbusConfig?.quantity || 10}
-                onChange={(e) => handleInputChange('modbusConfig.quantity', parseInt(e.target.value) || 10)}
-                min="1"
-                max="125"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="byteOrder">Byte Order</label>
-              <select
-                id="byteOrder"
-                value={config.modbusConfig?.byteOrder || 'big_endian'}
-                onChange={(e) => handleInputChange('modbusConfig.byteOrder', e.target.value)}
-                className="form-select"
-              >
-                <option value="big_endian">Big Endian</option>
-                <option value="little_endian">Little Endian</option>
-                <option value="big_endian_byte_swap">Big Endian Byte Swap</option>
-                <option value="little_endian_byte_swap">Little Endian Byte Swap</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="dataType">Data Type</label>
-              <select
-                id="dataType"
-                value={config.modbusConfig?.dataType || 'uint16'}
-                onChange={(e) => handleInputChange('modbusConfig.dataType', e.target.value)}
-                className="form-select"
-              >
-                <option value="uint16">UInt16</option>
-                <option value="int16">Int16</option>
-                <option value="uint32">UInt32</option>
-                <option value="int32">Int32</option>
-                <option value="float">Float</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* JSON View (Read-only for debugging) */}
         <div className="config-section">

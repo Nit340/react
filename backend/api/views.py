@@ -4,26 +4,27 @@ from django.views.decorators.http import require_http_methods
 import json
 from datetime import datetime
 
+# Initialize with empty config that will be populated by POST requests
 crane_config = {
-    "deviceId": "crane-001",
-    "name": "Main Crane",
-    "protocol": "modbus",
-    "status": "connected",
-    "endpoint": "192.168.1.100",
-    "port": 502,
-    "pollingInterval": 30,
-    "timeout": 10,
-    "retryCount": 3,
+    "deviceId": "",
+    "name": "",
+    "protocol": "",
+    "status": "disconnected",
+    "endpoint": "",
+    "port": 0,
+    "pollingInterval": 0,
+    "timeout": 0,
+    "retryCount": 0,
     "modbusConfig": {
-        "unitId": 1,
-        "functionCode": 3,
+        "unitId": 0,
+        "functionCode": 0,
         "startingAddress": 0,
-        "quantity": 10,
-        "byteOrder": "big_endian",
-        "dataType": "uint16"
+        "quantity": 0,
+        "byteOrder": "",
+        "dataType": ""
     },
-    "createdAt": datetime.now().isoformat() + 'Z',
-    "updatedAt": datetime.now().isoformat() + 'Z'
+    "createdAt": "",
+    "updatedAt": ""
 }
 
 @csrf_exempt
@@ -32,17 +33,28 @@ def crane_config_view(request):
     try:
         if request.method == 'GET':
             print("GET request for crane config")
+            # Return current configuration (may be empty if no POST received yet)
             return JsonResponse(crane_config)
         
         elif request.method == 'POST':
+            # Parse incoming JSON data from another server
             data = json.loads(request.body)
-            print("POST request with data:", json.dumps(data, indent=2))
+            print("POST request received with data:", json.dumps(data, indent=2))
             
-            # Update the configuration
+            # Update the configuration with received data
             crane_config.update(data)
-            crane_config['updatedAt'] = datetime.now().isoformat() + 'Z'
             
-            return JsonResponse(crane_config)
+            # Add/update timestamps
+            current_time = datetime.now().isoformat() + 'Z'
+            if not crane_config.get('createdAt'):
+                crane_config['createdAt'] = current_time
+            crane_config['updatedAt'] = current_time
+            
+            print("Configuration updated successfully")
+            return JsonResponse({
+                "message": "Configuration updated successfully",
+                "config": crane_config
+            })
             
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
@@ -77,4 +89,3 @@ def update_crane_status(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    

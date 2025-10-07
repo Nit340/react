@@ -11,28 +11,39 @@ const South = () => {
     fetchCraneConfig();
   }, []);
 
- const fetchCraneConfig = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    // Use the service name instead of localhost
-    const response = await fetch('http://localhost:8000/api/crane/config/');
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  const API_BASE_URL = 'http://localhost:8000';
+
+  const fetchCraneConfig = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`🔍 Fetching config from: ${API_BASE_URL}/api/proxy/config`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/proxy/config`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('📦 Received config result:', result);
+      
+      // Extract the actual config data from the response
+      if (result.success && result.data) {
+        setCraneConfig(result.data);
+      } else {
+        throw new Error('Invalid response format: missing data');
+      }
+      
+    } catch (error) {
+      console.error('Failed to fetch crane config:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
-    
-    const configData = await response.json();
-    setCraneConfig(configData);
-    
-  } catch (error) {
-    console.error('Failed to fetch crane config:', error);
-    setError(error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const handleConfigure = () => {
     navigate('/south/config');
   };
@@ -94,6 +105,26 @@ const South = () => {
     );
   }
 
+  // Check if craneConfig exists and has the expected structure
+  if (!craneConfig) {
+    return (
+      <div className="south-page">
+        <div className="page-title">
+          <h1>South Devices</h1>
+          <p>No configuration data available</p>
+        </div>
+        <div className="error-state">
+          <div className="error-icon">⚠️</div>
+          <h3>No Configuration Data</h3>
+          <p>Unable to load crane configuration</p>
+          <button className="btn btn-primary" onClick={fetchCraneConfig}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="south-page">
       <div className="page-title">
@@ -107,29 +138,34 @@ const South = () => {
             <div className="device-icon">🏗️</div>
             <div className="device-info">
               <h3 className="device-name" title={craneConfig.name}>
-                {craneConfig.name}
+                {craneConfig.name || 'Unnamed Device'}
               </h3>
               <p className="device-protocol">
-                {craneConfig.protocol?.toUpperCase()} • {craneConfig.deviceId}
+                {(craneConfig.protocol || 'Unknown')?.toUpperCase()} • {craneConfig.deviceId || 'No ID'}
               </p>
             </div>
-            {getStatusBadge(craneConfig.status)}
+            {getStatusBadge(craneConfig.status || 'disconnected')}
           </div>
 
           <div className="device-card-body">
             <div className="device-detail">
               <label>Endpoint:</label>
-              <span title={`${craneConfig.endpoint}:${craneConfig.port}`}>
-                {craneConfig.endpoint}:{craneConfig.port}
+              <span title={`${craneConfig.endpoint || 'N/A'}:${craneConfig.port || 'N/A'}`}>
+                {craneConfig.endpoint || 'N/A'}:{craneConfig.port || 'N/A'}
               </span>
             </div>
             <div className="device-detail">
               <label>Polling:</label>
-              <span>{craneConfig.pollingInterval}s</span>
+              <span>{craneConfig.pollingInterval || 'N/A'}s</span>
             </div>
             <div className="device-detail">
               <label>Updated:</label>
-              <span>{new Date(craneConfig.updatedAt).toLocaleDateString()}</span>
+              <span>
+                {craneConfig.updatedAt 
+                  ? new Date(craneConfig.updatedAt).toLocaleDateString() 
+                  : 'Unknown'
+                }
+              </span>
             </div>
           </div>
 

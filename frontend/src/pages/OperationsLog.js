@@ -1,7 +1,7 @@
 // pages/OperationsLog.js
 import React, { useState, useEffect } from 'react';
 import OperationsMetrics from '../components/OperationsLog/OperationsMetrics';
-import Filter from '../components/Common/Filter';
+import Filter from '../components/Filter';
 import OperationsTable from '../components/OperationsLog/OperationsTable';
 
 const OperationsLog = () => {

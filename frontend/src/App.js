@@ -30,6 +30,8 @@ import './App.css';
 import './CSS/Dashboard.css';
 import './CSS/South.css';
 import './CSS/SouthConfig.css';
+import './CSS/OperationsLog.css';
+import './CSS/Filter.css';
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 

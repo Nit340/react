@@ -2,8 +2,13 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('crane/config/', views.crane_config_view, name='crane-config'),
-    path('crane/status/', views.update_crane_status, name='crane-status'),
-    path('health/', views.health_check, name='health-check'),
-
+    # GET endpoints
+    path('proxy/config', views.get_crane_config_proxy, name='proxy-get-config'),
+    
+    # POST endpoints  
+    path('proxy/config/update', views.update_crane_config_proxy, name='proxy-update-config'),
+    
+    # Utility endpoints
+    path('health', views.health_check, name='health-check'),
+    path('debug', views.debug_info, name='debug-info'),
 ]

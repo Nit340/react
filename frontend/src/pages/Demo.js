@@ -137,52 +137,19 @@ const Demo = () => {
           console.error('API returned unsuccessful response:', result);
           setApiStatus('Error: API returned unsuccessful response');
           setIsConnected(false);
-          generateFallbackData();
         }
       } else {
         console.error('HTTP error:', response.status);
         setApiStatus(`HTTP Error: ${response.status}`);
         setIsConnected(false);
-        generateFallbackData();
       }
     } catch (error) {
       console.error('Polling Error:', error);
       setApiStatus(`Connection Error: ${error.message}`);
       setIsConnected(false);
-      generateFallbackData();
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Fallback data generation
-  const generateFallbackData = () => {
-    console.log('🔄 Generating fallback service data...');
-    
-    const mockServices = [
-      {
-        name: "onboard_io",
-        assets: [
-          { id: "in0", value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
-          { id: "in1", value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
-          { id: "out0", value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
-          { id: "out1", value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() }
-        ]
-      },
-      {
-        name: "modbus",
-        assets: [
-          { id: "V1", value: (220 + Math.random() * 20).toFixed(2), timestamp: new Date().toISOString() },
-          { id: "I1", value: (10 + Math.random() * 20).toFixed(2), timestamp: new Date().toISOString() },
-          { id: "V2", value: (220 + Math.random() * 20).toFixed(2), timestamp: new Date().toISOString() },
-          { id: "I2", value: (10 + Math.random() * 20).toFixed(2), timestamp: new Date().toISOString() }
-        ]
-      }
-    ];
-
-    processServiceData(mockServices);
-    setLastUpdate(new Date());
-    setApiStatus('Using fallback data (API unavailable)');
   };
 
   // WebSocket connection

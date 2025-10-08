@@ -2,11 +2,11 @@
 import React from 'react';
 
 const DemoMetrics = ({ data, services }) => {
-  // Extract key metrics from services or fallback to data
+  // Extract key metrics from services
   const extractKeyMetrics = () => {
     const metrics = [];
 
-    // Try to extract from services first
+    // Extract from services
     if (services && services.length > 0) {
       services.forEach(service => {
         service.assets.forEach(asset => {
@@ -29,16 +29,6 @@ const DemoMetrics = ({ data, services }) => {
           }
         });
       });
-    }
-
-    // Fallback to data if no service metrics found
-    if (metrics.length === 0) {
-      metrics.push(
-        { key: 'voltage', label: 'Voltage', unit: 'V', icon: 'fas fa-bolt', value: data.voltage || 0 },
-        { key: 'current', label: 'Current', unit: 'A', icon: 'fas fa-bolt', value: data.current || 0 },
-        { key: 'power', label: 'Power', unit: 'kW', icon: 'fas fa-bolt', value: data.power || 0 },
-        { key: 'load_weight', label: 'Load Weight', unit: 'kg', icon: 'fas fa-weight-hanging', value: data.load_weight || 0 }
-      );
     }
 
     // Ensure we have exactly 4 metrics

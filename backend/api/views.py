@@ -13,6 +13,8 @@ import time
 
 # ==================== CONFIGURATION ====================
 EXTERNAL_SERVER_BASE_URL = "http://0.0.0.0:5001/"
+EXTERNAL_SERVER_GET_BASE_URL = "http://192.168.1.16:5001/api"
+
 MOCK_CRANE_CONFIG = {
     "deviceId": "crane-001",
     "name": "Main Crane", 
@@ -349,61 +351,69 @@ def get_crane_config_proxy(request):
     print("🔍 Django Proxy: GET request received")
     print(f"Request path: {request.path}")
     print(f"Request method: {request.method}")
+    print(f"Request headers: {dict(request.headers)}")
     print("=" * 50)
     
-    print(f"🌐 Attempting to connect to: {EXTERNAL_SERVER_BASE_URL}/crane-config")
+    print(f"🌐 Attempting to connect to: {EXTERNAL_SERVER_GET_BASE_URL}/crane-config")
     
+    # First, try to get data from external server
     try:
         print("🔄 Making requests.get call...")
         
         response = requests.get(
-            f"{EXTERNAL_SERVER_BASE_URL}/crane-config",
-            timeout=5,
+            f"{EXTERNAL_SERVER_GET_BASE_URL}/crane-config",  # ✅ Fixed: Use GET_BASE_URL
+            timeout=10,
             headers={'Content-Type': 'application/json'}
         )
         
         print(f"✅ External server response status: {response.status_code}")
+        print(f"Response content: {response.text[:200]}...")
         
         if response.status_code == 200:
             external_data = response.json()
             print("✅ Successfully fetched from external server")
             
-            # Extract the config data from external server response
-            config_data = external_data.get('data', external_data)
-            
             return JsonResponse({
                 "success": True,
                 "message": "Data retrieved from external server",
-                "data": config_data,
+                "data": external_data.get('data', external_data),  # Handle both formats
                 "source": "external_server",
-                "external_url": EXTERNAL_SERVER_BASE_URL,
+                "external_url": EXTERNAL_SERVER_GET_BASE_URL,  # ✅ Fixed
                 "timestamp": datetime.now().isoformat() + 'Z'
             })
         else:
             print(f"❌ External server returned status: {response.status_code}")
+            # Fall back to mock data
             return JsonResponse({
-                "success": False,
-                "error": f"External server returned {response.status_code}",
-                "external_url": EXTERNAL_SERVER_BASE_URL,
+                "success": True,
+                "message": f"Using mock data (external server returned {response.status_code})",
+                "data": MOCK_CRANE_CONFIG,
+                "source": "mock_data_fallback",
+                "external_url": EXTERNAL_SERVER_GET_BASE_URL,  # ✅ Fixed
                 "timestamp": datetime.now().isoformat() + 'Z'
-            }, status=response.status_code)
+            })
             
     except requests.exceptions.ConnectionError as e:
-        print(f"❌ Connection error: {e}")
+        print(f"❌ Connection error (this is likely your issue): {e}")
+        print(f"❌ This usually means the server at {EXTERNAL_SERVER_GET_BASE_URL}/crane-config is not running or not accessible")
         return JsonResponse({
-            "success": False,
-            "error": f"Cannot connect to external server: {str(e)}",
-            "external_url": EXTERNAL_SERVER_BASE_URL,
+            "success": True,
+            "message": f"Using mock data (connection refused: {str(e)})",
+            "data": MOCK_CRANE_CONFIG,
+            "source": "mock_data_fallback",
+            "external_url": EXTERNAL_SERVER_GET_BASE_URL,
             "timestamp": datetime.now().isoformat() + 'Z'
-        }, status=503)
+        })
     except requests.exceptions.Timeout as e:
         print(f"⏰ Timeout error: {e}")
         return JsonResponse({
-            "success": False,
-            "error": f"External server timeout: {str(e)}",
-            "external_url": EXTERNAL_SERVER_BASE_URL,
+            "success": True,
+            "message": f"Using mock data (timeout: {str(e)})",
+            "data": MOCK_CRANE_CONFIG,
+            "source": "mock_data_fallback",
+            "external_url": EXTERNAL_SERVER_GET_BASE_URL,
             "timestamp": datetime.now().isoformat() + 'Z'
-        }, status=504)
+        })
     except Exception as e:
         print(f"💥 Unexpected error: {e}")
         return JsonResponse({
@@ -427,13 +437,14 @@ def update_crane_config_proxy(request):
         data = json.loads(request.body)
         print(f"📦 Data to forward: {json.dumps(data, indent=2)}")
         
-        print(f"🔄 Making POST request to: {EXTERNAL_SERVER_BASE_URL}/crane-config")
+        # Forward to external server
+        print(f"🔄 Making POST request to: {EXTERNAL_SERVER_GET_BASE_URL}/crane-config")
         
         response = requests.post(
-            f"{EXTERNAL_SERVER_BASE_URL}/crane-config",
+            f"{EXTERNAL_SERVER_GET_BASE_URL}/crane-config",  # ✅ Fixed: Use GET_BASE_URL
             json=data,
             headers={'Content-Type': 'application/json'},
-            timeout=5
+            timeout=10
         )
         
         print(f"✅ External server POST response: {response.status_code}")
@@ -443,14 +454,12 @@ def update_crane_config_proxy(request):
             external_response = response.json()
             print("✅ Successfully forwarded to external server")
             
-            # FIX: Return the external response data properly
             return JsonResponse({
                 "success": True,
                 "message": "Data forwarded to external server",
-                "data": external_response.get('data', external_response),  # Include the actual response data
                 "external_response": external_response,
                 "source": "external_server",
-                "external_url": EXTERNAL_SERVER_BASE_URL,
+                "external_url": EXTERNAL_SERVER_GET_BASE_URL,  # ✅ Fixed
                 "timestamp": datetime.now().isoformat() + 'Z'
             })
         else:
@@ -466,7 +475,7 @@ def update_crane_config_proxy(request):
         return JsonResponse({
             "success": False,
             "error": f"Cannot connect to external server: {str(e)}",
-            "external_url": EXTERNAL_SERVER_BASE_URL,
+            "external_url": EXTERNAL_SERVER_GET_BASE_URL,
             "timestamp": datetime.now().isoformat() + 'Z'
         }, status=503)
     except json.JSONDecodeError:
@@ -481,6 +490,7 @@ def update_crane_config_proxy(request):
             "error": str(e),
             "timestamp": datetime.now().isoformat() + 'Z'
         }, status=500)
+
 
 # ==================== UTILITY ENDPOINTS ====================
 

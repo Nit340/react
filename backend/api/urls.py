@@ -3,11 +3,12 @@ from . import views
 
 urlpatterns = [
     # ==================== EXISTING ENDPOINTS ====================
-    # GET endpoints
+       # GET endpoints
     path('proxy/config', views.get_crane_config_proxy, name='proxy-get-config'),
     
     # POST endpoints  
     path('proxy/config/update', views.update_crane_config_proxy, name='proxy-update-config'),
+    
     
     # Utility endpoints
     path('health', views.health_check, name='health-check'),

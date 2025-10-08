@@ -457,7 +457,7 @@ def update_crane_config_proxy(request):
             return JsonResponse({
                 "success": True,
                 "message": "Data forwarded to external server",
-                "external_response": external_response,
+                "external_response": external_response,   
                 "source": "external_server",
                 "external_url": EXTERNAL_SERVER_GET_BASE_URL,  # ✅ Fixed
                 "timestamp": datetime.now().isoformat() + 'Z'

@@ -25,6 +25,7 @@ import Device from './pages/settings/Device';
 import Help from './pages/Help';
 import South from './pages/South/South';
 import SouthConfig from './pages/South/SouthConfig';
+import Demo from './pages/Demo';
 // Styles
 import './App.css';
 import './CSS/Dashboard.css';
@@ -33,6 +34,8 @@ import './CSS/SouthConfig.css';
 import './CSS/OperationsLog.css';
 import './CSS/Filter.css';
 import './CSS/EnergyMonitoring.css';
+// In App.js, add this import with the others
+import './CSS/Demo.css';
 // In App.js, add this import with the others
 import './CSS/Load.css';
 function App() {
@@ -50,6 +53,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/south" element={<South />} />
+            <Route path="/demo" element={<Demo />} />
             <Route path="/operations" element={<OperationsLog />} />
             <Route path="/load" element={<Load />} />
             <Route path="/vibration" element={<VibrationMonitoring />} />

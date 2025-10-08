@@ -12,6 +12,7 @@ const Sidebar = ({ sidebarExpanded, setSidebarExpanded }) => {
   const navItems = [
     { icon: 'fas fa-tachometer-alt', label: 'Dashboard', path: '/' },
     { icon: 'fas fa-compass', label: 'South', path: '/south' },
+    { icon:'fas fa-penguin', label: 'Demo', path: '/demo' },
     { icon: 'fas fa-history', label: 'Operations Log', path: '/operations' },
     { icon: 'fas fa-weight-hanging', label: 'Load', path: '/load' },
     { icon: 'fas fa-wave-square', label: 'Vibration Monitoring', path: '/vibration' },

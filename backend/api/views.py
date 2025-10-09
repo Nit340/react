@@ -210,7 +210,7 @@ def get_iot_data(request):
             
             print(f"✅ Returning {processed_data['total_services']} services from external server")
             return JsonResponse({
-                "success": True,
+                "success": True, 
                 "data": processed_data,
                 "source": "external_server",
                 "timestamp": datetime.now().isoformat() + 'Z'

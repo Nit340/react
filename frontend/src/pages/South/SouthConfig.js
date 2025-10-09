@@ -8,7 +8,7 @@ const SouthConfig = () => {
   const [error, setError] = useState(null);
   const [apiResponse, setApiResponse] = useState(null); // Store full API response
   const navigate = useNavigate();
-
+   
   const API_BASE_URL = 'http://localhost:8000';
 
   useEffect(() => {

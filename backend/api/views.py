@@ -446,7 +446,7 @@ def update_crane_config_proxy(request):
             headers={'Content-Type': 'application/json'},
             timeout=10
         )
-        
+            
         print(f"✅ External server POST response: {response.status_code}")
         print(f"Response content: {response.text[:200]}...")
         

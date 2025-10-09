@@ -2,23 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const South = () => {
-  const [craneConfig, setCraneConfig] = useState(null);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchCraneConfig();
-  }, []);
-
   const API_BASE_URL = 'http://localhost:8000';
 
-  const fetchCraneConfig = async () => {
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const fetchServices = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`🔍 Fetching config from: ${API_BASE_URL}/api/proxy/config`);
+      console.log(`🔍 Fetching services from: ${API_BASE_URL}/api/proxy/config`);
       
       const response = await fetch(`${API_BASE_URL}/api/proxy/config`);
       
@@ -27,52 +27,53 @@ const South = () => {
       }
       
       const result = await response.json();
-      console.log('📦 Received config result:', result);
+      console.log('📦 Received services:', result);
       
-      // Extract the actual config data from the response
       if (result.success && result.data) {
-        setCraneConfig(result.data);
+        setServices(result.data);
       } else {
         throw new Error('Invalid response format: missing data');
       }
       
     } catch (error) {
-      console.error('Failed to fetch crane config:', error);
+      console.error('Failed to fetch services:', error);
       setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConfigure = () => {
-    navigate('/south/config');
+  const handleConfigureService = (serviceName) => {
+    navigate(`/south/config/${serviceName}`);
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      connected: { class: 'status-connected', text: 'Connected' },
-      disconnected: { class: 'status-disconnected', text: 'Disconnected' },
-      error: { class: 'status-error', text: 'Error' }
+  const getServiceIcon = (serviceType) => {
+    const icons = {
+      crane_module: '🏗️',
+      onboard_io: '🔌',
+      modbus_poller: '📡',
+      digital_input: '⚡',
+      analog_input: '📊',
+      default: '🔧'
     };
-    const config = statusConfig[status] || statusConfig.disconnected;
-    return (
-      <span className={`status-badge ${config.class}`}>
-        <span className={`status-indicator ${status}`}></span>
-        {config.text}
-      </span>
-    );
+    
+    return icons[serviceType] || icons.default;
+  };
+
+  const getServiceTypeDisplay = (service) => {
+    return service.config?.type || service.name || 'Unknown Service';
   };
 
   if (loading) {
     return (
       <div className="south-page">
         <div className="page-title">
-          <h1>South Devices</h1>
-          <p>Loading crane configuration...</p>
+          <h1>Crane Data Flow</h1>
+          <p>Loading services configuration...</p>
         </div>
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Connecting to server...</p>
+          <p>Loading services...</p>
         </div>
       </div>
     );
@@ -82,43 +83,15 @@ const South = () => {
     return (
       <div className="south-page">
         <div className="page-title">
-          <h1>South Devices</h1>
+          <h1>Crane Data Flow</h1>
           <p>Connection Error</p>
         </div>
         <div className="error-state">
           <div className="error-icon">⚠️</div>
           <h3>Server Connection Failed</h3>
           <p>{error}</p>
-          <div className="troubleshooting">
-            <p><strong>To fix this:</strong></p>
-            <ol>
-              <li>Make sure Flask server is running</li>
-              <li>Check if port 5001 is available</li>
-              <li>Verify no firewall is blocking the connection</li>
-            </ol>
-          </div>
-          <button className="btn btn-primary" onClick={fetchCraneConfig}>
+          <button className="btn btn-primary" onClick={fetchServices}>
             Retry Connection
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if craneConfig exists and has the expected structure
-  if (!craneConfig) {
-    return (
-      <div className="south-page">
-        <div className="page-title">
-          <h1>South Devices</h1>
-          <p>No configuration data available</p>
-        </div>
-        <div className="error-state">
-          <div className="error-icon">⚠️</div>
-          <h3>No Configuration Data</h3>
-          <p>Unable to load crane configuration</p>
-          <button className="btn btn-primary" onClick={fetchCraneConfig}>
-            Retry
           </button>
         </div>
       </div>
@@ -128,57 +101,113 @@ const South = () => {
   return (
     <div className="south-page">
       <div className="page-title">
-        <h1>South Devices</h1>
-        <p>Manage your crane device configuration</p>
+        <h1>Crane Data Flow</h1>
+        <p>Crane receives data from connected services</p>
       </div>
 
-      <div className="south-devices-grid">
-        <div className="south-device-card">
-          <div className="device-card-header">
-            <div className="device-icon">🏗️</div>
-            <div className="device-info">
-              <h3 className="device-name" title={craneConfig.name}>
-                {craneConfig.name || 'Unnamed Device'}
-              </h3>
-              <p className="device-protocol">
-                {(craneConfig.protocol || 'Unknown')?.toUpperCase()} • {craneConfig.deviceId || 'No ID'}
-              </p>
-            </div>
-            {getStatusBadge(craneConfig.status || 'disconnected')}
+      {/* N8N-style Flow Diagram */}
+      <div className="flow-diagram">
+        {/* Services Row */}
+        <div className="flow-row services-row">
+          <div className="flow-row-label">
+            <h3>Data Sources</h3>
+            <p>Services providing data to crane</p>
           </div>
-
-          <div className="device-card-body">
-            <div className="device-detail">
-              <label>Endpoint:</label>
-              <span title={`${craneConfig.endpoint || 'N/A'}:${craneConfig.port || 'N/A'}`}>
-                {craneConfig.endpoint || 'N/A'}:{craneConfig.port || 'N/A'}
-              </span>
-            </div>
-            <div className="device-detail">
-              <label>Polling:</label>
-              <span>{craneConfig.pollingInterval || 'N/A'}s</span>
-            </div>
-            <div className="device-detail">
-              <label>Updated:</label>
-              <span>
-                {craneConfig.updatedAt 
-                  ? new Date(craneConfig.updatedAt).toLocaleDateString() 
-                  : 'Unknown'
-                }
-              </span>
-            </div>
+          
+          <div className="nodes-container">
+            {services.map((service, index) => (
+              <div key={index} className="service-node">
+                <div className="node-header">
+                  <div className="node-icon">
+                    {getServiceIcon(service.config?.type || service.name)}
+                  </div>
+                  <div className="node-info">
+                    <h4>{service.name}</h4>
+                    <p>{getServiceTypeDisplay(service)}</p>
+                  </div>
+                </div>
+                
+                <div className="node-body">
+                  <div className="node-stats">
+                    <span className="data-points">
+                      {service.data_points?.length || 0} data points
+                    </span>
+                    <span className="node-status connected">● Connected</span>
+                  </div>
+                </div>
+                
+                <div className="node-footer">
+                  <button 
+                    className="btn btn-primary btn-small"
+                    onClick={() => handleConfigureService(service.name)}
+                  >
+                    Configure
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div className="device-card-footer">
-            <button 
-              className="btn btn-primary"
-              onClick={handleConfigure}
-            >
-              ⚙️ Configure
-            </button>
+        {/* Flow Arrows */}
+        <div className="flow-arrows-row">
+          <div className="flow-arrows">
+            {services.map((_, index) => (
+              <div key={index} className="flow-arrow">
+                <div className="arrow-line"></div>
+                <div className="arrow-head"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Crane Row */}
+        <div className="flow-row crane-row">
+          <div className="flow-row-label">
+            <h3>Crane Controller</h3>
+            <p>Processes data from services</p>
+          </div>
+          
+          <div className="nodes-container">
+            <div className="crane-node">
+              <div className="node-header">
+                <div className="node-icon crane-icon">🏗️</div>
+                <div className="node-info">
+                  <h4>Main Crane</h4>
+                  <p>Central Controller</p>
+                </div>
+              </div>
+              
+              <div className="node-body">
+                <div className="node-stats">
+                  <span className="data-points">
+                    {services.reduce((total, service) => total + (service.data_points?.length || 0), 0)} total data points
+                  </span>
+                  <span className="node-status active">● Active</span>
+                </div>
+              </div>
+              
+              <div className="node-footer">
+                <div className="connected-services">
+                  Connected to {services.length} services
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Empty State */}
+      {services.length === 0 && !loading && (
+        <div className="empty-flow">
+          <div className="empty-icon">🔧</div>
+          <h3>No Services Configured</h3>
+          <p>No service modules found. The crane needs services to receive data.</p>
+          <button className="btn btn-primary" onClick={fetchServices}>
+            Check for Services
+          </button>
+        </div>
+      )}
     </div>
   );
 };

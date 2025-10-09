@@ -71,7 +71,7 @@ function App() {
             <Route path="/settings/device" element={<Device />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
-            <Route path="/south/config" element={<SouthConfig />} /> {/* Add this route */}
+            <Route path="/south/config/:serviceName" element={<SouthConfig />} /> 
           </Routes>
         </div>
       </div>

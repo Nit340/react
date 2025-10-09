@@ -1,121 +1,167 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const SouthConfig = () => {
-  const [config, setConfig] = useState(null);
+  const [services, setServices] = useState([]);
+  const [currentService, setCurrentService] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [apiResponse, setApiResponse] = useState(null); // Store full API response
   const navigate = useNavigate();
+  const { serviceName } = useParams();
    
   const API_BASE_URL = 'http://localhost:8000';
 
   useEffect(() => {
-    fetchConfig();
-  }, []);
+    fetchServices();
+  }, [serviceName]);
 
-  const fetchConfig = async () => {
+  const fetchServices = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`🔍 Fetching config from: ${API_BASE_URL}/api/proxy/config`);
+      console.log(`🔍 Fetching services from: ${API_BASE_URL}/api/proxy/config`);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      const response = await fetch(`${API_BASE_URL}/api/proxy/config`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      console.log(`Response status: ${response.status}`);
-      console.log(`Response status text: ${response.statusText}`);
+      const response = await fetch(`${API_BASE_URL}/api/proxy/config`);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Fetch error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const result = await response.json();
-      console.log('📦 Full API response:', result);
-      setApiResponse(result); // Store the full response
+      console.log('📦 Received services:', result);
       
-      // Extract the actual config data
       if (result.success && result.data) {
-        console.log('✅ Using config data from response:', result.data);
-        setConfig(result.data);
+        setServices(result.data);
+        
+        // Find the current service by name
+        const service = result.data.find(s => s.name === serviceName);
+        if (service) {
+          setCurrentService(service);
+        } else {
+          throw new Error(`Service '${serviceName}' not found`);
+        }
       } else {
-        throw new Error('Invalid response format: missing data property');
+        throw new Error('Invalid response format: missing data');
       }
       
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('Request timeout:', error);
-        setError('Request timeout - server is not responding');
-      } else {
-        console.error('Failed to fetch config:', error);
-        setError(error.message);
-      }
-      // Set default config as fallback
-      setConfig(getDefaultConfig());
+      console.error('Failed to fetch services:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getDefaultConfig = () => {
-    return {
-      deviceId: 'crane-001',
-      name: 'Main Crane',
-      protocol: 'modbus',
-      status: 'disconnected',
-      endpoint: '192.168.1.100',
-      port: 502,
-      pollingInterval: 30,
-      timeout: 10,
-      retryCount: 3,
-      modbusConfig: {
-        unitId: 1,
-        functionCode: 3,
-        startingAddress: 0,
-        quantity: 10,
-        byteOrder: 'big_endian',
-        dataType: 'uint16'
-      },
-      updatedAt: new Date().toISOString()
-    };
+  const updateServiceInList = (updatedService) => {
+    const updatedServices = services.map(service => 
+      service.name === serviceName ? updatedService : service
+    );
+    setServices(updatedServices);
+    setCurrentService(updatedService);
   };
 
-  const handleInputChange = (path, value) => {
-    setConfig(prevConfig => {
-      if (!prevConfig) return prevConfig;
-      
-      const newConfig = JSON.parse(JSON.stringify(prevConfig));
-      
-      if (path.includes('.')) {
-        // Handle nested paths like 'modbusConfig.unitId'
-        const keys = path.split('.');
-        let current = newConfig;
-        for (let i = 0; i < keys.length - 1; i++) {
-          if (!current[keys[i]]) current[keys[i]] = {};
-          current = current[keys[i]];
-        }
-        current[keys[keys.length - 1]] = value;
-      } else {
-        // Handle top-level paths
-        newConfig[path] = value;
+  const handleConfigChange = (key, value) => {
+    if (!currentService) return;
+    
+    const updatedService = {
+      ...currentService,
+      config: {
+        ...currentService.config,
+        [key]: value
       }
-      
-      return newConfig;
-    });
+    };
+    
+    setCurrentService(updatedService);
+  };
+
+  const handleDataPointChange = (index, field, value) => {
+    if (!currentService || !currentService.data_points) return;
+    
+    const updatedDataPoints = [...currentService.data_points];
+    updatedDataPoints[index] = {
+      ...updatedDataPoints[index],
+      [field]: value
+    };
+    
+    const updatedService = {
+      ...currentService,
+      data_points: updatedDataPoints
+    };
+    
+    setCurrentService(updatedService);
+  };
+
+  const addDataPoint = () => {
+    if (!currentService) return;
+    
+    // Create a new data point with default values based on service type
+    const newDataPoint = createDefaultDataPoint(currentService.name);
+    
+    const updatedService = {
+      ...currentService,
+      data_points: [...(currentService.data_points || []), newDataPoint]
+    };
+    
+    setCurrentService(updatedService);
+  };
+
+  const createDefaultDataPoint = (serviceName) => {
+    const basePoint = {
+      name: `new_point_${Date.now()}`,
+      type: 'float'
+    };
+
+    // Add service-specific default fields
+    switch (serviceName) {
+      case 'modbus_poller':
+        return {
+          ...basePoint,
+          register_type: 'holding_register',
+          address: (currentService?.data_points?.length || 0) * 10,
+          data_type: 'float'
+        };
+      case 'onboard_io':
+        return {
+          ...basePoint,
+          type: 'boolean'
+        };
+      default:
+        return basePoint;
+    }
+  };
+
+  const removeDataPoint = (index) => {
+    if (!currentService || !currentService.data_points) return;
+    
+    const updatedDataPoints = currentService.data_points.filter((_, i) => i !== index);
+    const updatedService = {
+      ...currentService,
+      data_points: updatedDataPoints
+    };
+    
+    setCurrentService(updatedService);
+  };
+
+  const duplicateDataPoint = (index) => {
+    if (!currentService || !currentService.data_points) return;
+    
+    const pointToDuplicate = currentService.data_points[index];
+    const duplicatedPoint = {
+      ...pointToDuplicate,
+      name: `${pointToDuplicate.name}_copy_${Date.now()}`
+    };
+    
+    const updatedDataPoints = [...currentService.data_points];
+    updatedDataPoints.splice(index + 1, 0, duplicatedPoint);
+    
+    const updatedService = {
+      ...currentService,
+      data_points: updatedDataPoints
+    };
+    
+    setCurrentService(updatedService);
   };
 
   const handleSave = async () => {
@@ -123,52 +169,41 @@ const SouthConfig = () => {
       setSaving(true);
       setError(null);
       
-      if (!config) {
-        throw new Error('No configuration data to save');
+      if (!currentService) {
+        throw new Error('No service data to save');
       }
       
-      console.log('💾 Saving config:', config);
-      console.log('Sending POST request to:', `${API_BASE_URL}/api/proxy/config/update`);
+      console.log('💾 Saving service:', currentService);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // Update the services list with current service
+      const updatedServices = services.map(service => 
+        service.name === serviceName ? currentService : service
+      );
       
       const response = await fetch(`${API_BASE_URL}/api/proxy/config/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...config,
-          updatedAt: new Date().toISOString()
-        }),
-        signal: controller.signal,
+        body: JSON.stringify(updatedServices),
       });
-
-      clearTimeout(timeoutId);
       
       console.log(`Save response status: ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Save error response:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const savedResult = await response.json();
       console.log('✅ Save successful:', savedResult);
       
-      alert('Configuration saved successfully!');
+      alert('Service configuration saved successfully!');
       navigate('/south');
       
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('Save request timeout:', error);
-        setError('Save request timeout - server is not responding');
-      } else {
-        console.error('Failed to save config:', error);
-        setError(error.message);
-      }
+      console.error('Failed to save service config:', error);
+      setError(error.message);
       alert(`Failed to save configuration: ${error.message}`);
     } finally {
       setSaving(false);
@@ -184,37 +219,39 @@ const SouthConfig = () => {
       <div className="south-config-page">
         <div className="page-header">
           <div className="header-content">
-            <h1>Crane Configuration</h1>
-            <p>Loading configuration from backend...</p>
+            <h1>Service Configuration</h1>
+            <p>Loading {serviceName} configuration...</p>
           </div>
         </div>
         <div className="loading-container">
           <div className="loading-spinner">
             <div className="spinner"></div>
-            <p>Loading configuration...</p>
+            <p>Loading service configuration...</p>
           </div>
-          <p className="api-info">API URL: {API_BASE_URL}/api/proxy/config</p>
         </div>
       </div>
     );
   }
 
-  if (!config) {
+  if (error || !currentService) {
     return (
       <div className="south-config-page">
         <div className="page-header">
           <div className="header-content">
-            <h1>Crane Configuration</h1>
-            <p>No configuration data available</p>
+            <h1>Service Configuration</h1>
+            <p>Error loading service</p>
           </div>
         </div>
         <div className="error-container">
           <div className="error-content">
-            <h2>⚠️ Configuration Error</h2>
-            <p>Unable to load configuration data</p>
+            <h2>⚠️ Service Error</h2>
+            <p>Unable to load service configuration</p>
             <p className="error-message">Error: {error}</p>
-            <button className="btn btn-primary" onClick={fetchConfig}>
+            <button className="btn btn-primary" onClick={fetchServices}>
               Retry
+            </button>
+            <button className="btn btn-secondary" onClick={handleCancel}>
+              Back to Services
             </button>
           </div>
         </div>
@@ -226,18 +263,12 @@ const SouthConfig = () => {
     <div className="south-config-page">
       <div className="page-header">
         <div className="header-content">
-          <h1>Crane Configuration</h1>
-          <p>Configure your crane device settings</p>
-          {config.updatedAt && (
-            <p className="config-info">
-              Last updated: {new Date(config.updatedAt).toLocaleString()}
-            </p>
-          )}
-          {apiResponse && (
-            <p className="config-source">
-              Source: {apiResponse.source} • {apiResponse.message}
-            </p>
-          )}
+          <h1>{currentService.name} Configuration</h1>
+          <p>Configure service settings and data points</p>
+          <div className="service-badge">
+            <span className="badge">{currentService.config?.type || 'generic'}</span>
+            <span className="badge">{currentService.data_points?.length || 0} Data Points</span>
+          </div>
         </div>
       </div>
 
@@ -249,243 +280,203 @@ const SouthConfig = () => {
       )}
 
       <div className="config-container">
-        {/* Basic Configuration */}
+        {/* Service Configuration */}
         <div className="config-section">
           <div className="section-header">
-            <h2>Basic Configuration</h2>
+            <h2>Service Configuration</h2>
           </div>
           <div className="form-grid">
-            <div className="form-field">
-              <label htmlFor="deviceName">Device Name</label>
-              <input
-                id="deviceName"
-                type="text"
-                value={config.name || ''}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-                placeholder="Enter device name"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="deviceId">Device ID</label>
-              <input
-                id="deviceId"
-                type="text"
-                value={config.deviceId || ''}
-                onChange={(e) => handleInputChange('deviceId', e.target.value)}
-                placeholder="Enter device ID"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="protocol">Protocol</label>
-              <select
-                id="protocol"
-                value={config.protocol || 'modbus'}
-                onChange={(e) => handleInputChange('protocol', e.target.value)}
-                className="form-select"
-              >
-                <option value="modbus">Modbus TCP</option>
-                <option value="opcua">OPC UA</option>
-                <option value="mqtt">MQTT</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="status">Status</label>
-              <select
-                id="status"
-                value={config.status || 'disconnected'}
-                onChange={(e) => handleInputChange('status', e.target.value)}
-                className="form-select"
-              >
-                <option value="connected">Connected</option>
-                <option value="disconnected">Disconnected</option>
-                <option value="error">Error</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="endpoint">Endpoint/Host</label>
-              <input
-                id="endpoint"
-                type="text"
-                value={config.endpoint || ''}
-                onChange={(e) => handleInputChange('endpoint', e.target.value)}
-                placeholder="192.168.1.100"
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="port">Port</label>
-              <input
-                id="port"
-                type="number"
-                value={config.port || 502}
-                onChange={(e) => handleInputChange('port', parseInt(e.target.value) || 502)}
-                placeholder="502"
-                min="1"
-                max="65535"
-                className="form-input"
-              />
-            </div>
+            {currentService.config && Object.entries(currentService.config).map(([key, value]) => (
+              <div key={key} className="form-field">
+                <label htmlFor={key}>{key.replace(/_/g, ' ').toUpperCase()}</label>
+                <input
+                  id={key}
+                  type="text"
+                  value={value || ''}
+                  onChange={(e) => handleConfigChange(key, e.target.value)}
+                  placeholder={`Enter ${key}`}
+                  className="form-input"
+                />
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Connection Settings */}
+        {/* Data Points Configuration */}
         <div className="config-section">
           <div className="section-header">
-            <h2>Connection Settings</h2>
+            <div className="section-title">
+              <h2>Data Points</h2>
+              <span className="data-points-count">
+                ({currentService.data_points?.length || 0})
+              </span>
+            </div>
+            <div className="section-actions">
+              <button 
+                className="btn btn-outline btn-small"
+                onClick={addDataPoint}
+              >
+                + Add Data Point
+              </button>
+            </div>
           </div>
-          <div className="form-grid">
-            <div className="form-field">
-              <label htmlFor="pollingInterval">Polling Interval (seconds)</label>
-              <input
-                id="pollingInterval"
-                type="number"
-                value={config.pollingInterval || 30}
-                onChange={(e) => handleInputChange('pollingInterval', parseInt(e.target.value) || 30)}
-                min="1"
-                max="3600"
-                className="form-input"
-              />
-            </div>
+          
+          {currentService.data_points && currentService.data_points.length > 0 ? (
+            <div className="data-points-container">
+              {currentService.data_points.map((point, index) => (
+                <div key={index} className="data-point-card">
+                  <div className="data-point-header">
+                    <h4>
+                      <span className="point-number">#{index + 1}</span>
+                      {point.name}
+                    </h4>
+                    <div className="data-point-actions">
+                      <button 
+                        className="btn btn-outline btn-small"
+                        onClick={() => duplicateDataPoint(index)}
+                        title="Duplicate"
+                      >
+                        📋
+                      </button>
+                      <button 
+                        className="btn btn-danger btn-small"
+                        onClick={() => removeDataPoint(index)}
+                        title="Remove"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="form-grid compact">
+                    <div className="form-field">
+                      <label htmlFor={`point-name-${index}`}>Name</label>
+                      <input
+                        id={`point-name-${index}`}
+                        type="text"
+                        value={point.name || ''}
+                        onChange={(e) => handleDataPointChange(index, 'name', e.target.value)}
+                        placeholder="Enter data point name"
+                        className="form-input"
+                      />
+                    </div>
 
-            <div className="form-field">
-              <label htmlFor="timeout">Timeout (seconds)</label>
-              <input
-                id="timeout"
-                type="number"
-                value={config.timeout || 10}
-                onChange={(e) => handleInputChange('timeout', parseInt(e.target.value) || 10)}
-                min="1"
-                max="300"
-                className="form-input"
-              />
-            </div>
+                    <div className="form-field">
+                      <label htmlFor={`point-type-${index}`}>Type</label>
+                      <select
+                        id={`point-type-${index}`}
+                        value={point.type || 'string'}
+                        onChange={(e) => handleDataPointChange(index, 'type', e.target.value)}
+                        className="form-select"
+                      >
+                        <option value="string">String</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="int">Integer</option>
+                        <option value="float">Float</option>
+                        <option value="double">Double</option>
+                      </select>
+                    </div>
 
-            <div className="form-field">
-              <label htmlFor="retryCount">Retry Count</label>
-              <input
-                id="retryCount"
-                type="number"
-                value={config.retryCount || 3}
-                onChange={(e) => handleInputChange('retryCount', parseInt(e.target.value) || 3)}
-                min="0"
-                max="10"
-                className="form-input"
-              />
+                    {/* Additional fields based on service type */}
+                    {point.register_type && (
+                      <div className="form-field">
+                        <label htmlFor={`point-register-${index}`}>Register Type</label>
+                        <select
+                          id={`point-register-${index}`}
+                          value={point.register_type || 'holding_register'}
+                          onChange={(e) => handleDataPointChange(index, 'register_type', e.target.value)}
+                          className="form-select"
+                        >
+                          <option value="holding_register">Holding Register</option>
+                          <option value="input_register">Input Register</option>
+                          <option value="coil">Coil</option>
+                          <option value="discrete_input">Discrete Input</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {point.address !== undefined && (
+                      <div className="form-field">
+                        <label htmlFor={`point-address-${index}`}>Address</label>
+                        <input
+                          id={`point-address-${index}`}
+                          type="number"
+                          value={point.address || 0}
+                          onChange={(e) => handleDataPointChange(index, 'address', parseInt(e.target.value) || 0)}
+                          min="0"
+                          max="65535"
+                          className="form-input"
+                        />
+                      </div>
+                    )}
+
+                    {point.data_type && (
+                      <div className="form-field">
+                        <label htmlFor={`point-data-type-${index}`}>Data Type</label>
+                        <select
+                          id={`point-data-type-${index}`}
+                          value={point.data_type || 'int'}
+                          onChange={(e) => handleDataPointChange(index, 'data_type', e.target.value)}
+                          className="form-select"
+                        >
+                          <option value="int">Integer</option>
+                          <option value="float">Float</option>
+                          <option value="double">Double</option>
+                          <option value="boolean">Boolean</option>
+                          <option value="string">String</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="no-data-points">
+              <div className="empty-state">
+                <div className="empty-icon">📊</div>
+                <h3>No Data Points</h3>
+                <p>No data points configured yet. Click "Add Data Point" to create one.</p>
+                <button className="btn btn-primary" onClick={addDataPoint}>
+                  Add Your First Data Point
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="config-section">
+          <div className="section-header">
+            <h2>Quick Actions</h2>
+          </div>
+          <div className="quick-actions">
+            <button className="btn btn-outline" onClick={addDataPoint}>
+              + Add Multiple Data Points
+            </button>
+            <button className="btn btn-outline" onClick={() => {
+              if (currentService.data_points && currentService.data_points.length > 0) {
+                const clearedService = {
+                  ...currentService,
+                  data_points: []
+                };
+                setCurrentService(clearedService);
+              }
+            }}>
+              Clear All Data Points
+            </button>
           </div>
         </div>
 
-        {/* Modbus Configuration */}
-        {config.modbusConfig && (
-          <div className="config-section">
-            <div className="section-header">
-              <h2>Modbus Configuration</h2>
-            </div>
-            <div className="form-grid">
-              <div className="form-field">
-                <label htmlFor="unitId">Unit ID</label>
-                <input
-                  id="unitId"
-                  type="number"
-                  value={config.modbusConfig.unitId || 1}
-                  onChange={(e) => handleInputChange('modbusConfig.unitId', parseInt(e.target.value) || 1)}
-                  min="1"
-                  max="247"
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="functionCode">Function Code</label>
-                <select
-                  id="functionCode"
-                  value={config.modbusConfig.functionCode || 3}
-                  onChange={(e) => handleInputChange('modbusConfig.functionCode', parseInt(e.target.value))}
-                  className="form-select"
-                >
-                  <option value={1}>01 - Read Coils</option>
-                  <option value={2}>02 - Read Discrete Inputs</option>
-                  <option value={3}>03 - Read Holding Registers</option>
-                  <option value={4}>04 - Read Input Registers</option>
-                </select>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="startingAddress">Starting Address</label>
-                <input
-                  id="startingAddress"
-                  type="number"
-                  value={config.modbusConfig.startingAddress || 0}
-                  onChange={(e) => handleInputChange('modbusConfig.startingAddress', parseInt(e.target.value) || 0)}
-                  min="0"
-                  max="65535"
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="quantity">Quantity</label>
-                <input
-                  id="quantity"
-                  type="number"
-                  value={config.modbusConfig.quantity || 10}
-                  onChange={(e) => handleInputChange('modbusConfig.quantity', parseInt(e.target.value) || 10)}
-                  min="1"
-                  max="125"
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="byteOrder">Byte Order</label>
-                <select
-                  id="byteOrder"
-                  value={config.modbusConfig.byteOrder || 'big_endian'}
-                  onChange={(e) => handleInputChange('modbusConfig.byteOrder', e.target.value)}
-                  className="form-select"
-                >
-                  <option value="big_endian">Big Endian</option>
-                  <option value="little_endian">Little Endian</option>
-                  <option value="big_endian_byte_swap">Big Endian Byte Swap</option>
-                  <option value="little_endian_byte_swap">Little Endian Byte Swap</option>
-                </select>
-              </div>
-
-              <div className="form-field">
-                <label htmlFor="dataType">Data Type</label>
-                <select
-                  id="dataType"
-                  value={config.modbusConfig.dataType || 'uint16'}
-                  onChange={(e) => handleInputChange('modbusConfig.dataType', e.target.value)}
-                  className="form-select"
-                >
-                  <option value="uint16">UInt16</option>
-                  <option value="int16">Int16</option>
-                  <option value="uint32">UInt32</option>
-                  <option value="int32">Int32</option>
-                  <option value="float">Float</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* JSON View (Read-only for debugging) */}
+        {/* JSON View */}
         <div className="config-section">
           <div className="section-header">
-            <h2>Configuration JSON</h2>
-            <p className="section-description">Read-only view of current configuration</p>
+            <h2>Service JSON</h2>
+            <p className="section-description">Current service configuration</p>
           </div>
           <div className="json-viewer">
             <pre className="json-content">
-              {JSON.stringify(config, null, 2)}
+              {JSON.stringify(currentService, null, 2)}
             </pre>
           </div>
         </div>

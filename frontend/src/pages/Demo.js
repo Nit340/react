@@ -38,68 +38,19 @@ const Demo = () => {
     // Map service assets to flat data structure
     serviceArray.forEach(service => {
       service.assets.forEach(asset => {
-        // Map specific asset IDs to meaningful names
-        switch (asset.id) {
-          case 'V1':
-          case 'V2':
-            flatData.voltage = asset.value;
-            break;
-          case 'I1':
-          case 'I2':
-            flatData.current = asset.value;
-            break;
-          case 'in0':
-            flatData.brake_status = asset.value;
-            break;
-          case 'in1':
-            flatData.safety_status = asset.value;
-            break;
-          case 'out0':
-            flatData.operational_mode = asset.value;
-            break;
-          case 'out1':
-            flatData.motor_control = asset.value;
-            break;
-          default:
-            flatData[asset.id] = asset.value;
-        }
+        flatData[asset.id] = asset.value;
       });
     });
 
-    // Add default values for any missing fields
-    const defaultData = {
-      temperature: '--',
-      humidity: '--',
-      pressure: '--',
-      voltage: '--',
-      current: '--',
-      power: '--',
-      frequency: '--',
-      vibration_x: '--',
-      vibration_y: '--',
-      vibration_z: '--',
-      load_weight: '--',
-      load_position: '--',
-      motor_speed: '--',
-      brake_status: '--',
-      safety_status: '--',
-      operational_mode: '--',
-      ...flatData // Override with actual values
-    };
-
-    // Calculate power if we have voltage and current
-    if (flatData.voltage && flatData.current && flatData.voltage !== '--' && flatData.current !== '--') {
-      defaultData.power = (flatData.voltage * flatData.current / 1000).toFixed(2); // Convert to kW
-    }
-
-    defaultData.timestamp = serviceArray[0]?.assets[0]?.timestamp || new Date().toISOString();
-    defaultData.source = 'service_data';
+    // Add timestamp and source
+    flatData.timestamp = serviceArray[0]?.assets[0]?.timestamp || new Date().toISOString();
+    flatData.source = 'service_data';
     
     console.log('✅ Processed services:', processedServices);
-    console.log('✅ Flat data:', defaultData);
+    console.log('✅ Flat data:', flatData);
     
-    setData(defaultData);
-    return { services: processedServices, flatData: defaultData };
+    setData(flatData);
+    return { services: processedServices, flatData };
   };
 
   // Enhanced polling function
@@ -107,6 +58,7 @@ const Demo = () => {
     if (isLoading) return;
     
     setIsLoading(true);
+    
     try {
       console.log('🔄 Polling: Fetching data from /api/iot-data...');
       const response = await fetch('/api/iot-data');
@@ -229,7 +181,6 @@ const Demo = () => {
       <div className="page-title">
         <h1>IoT Data Demo</h1>
         <p>Real-time monitoring of service-based IoT data</p>
-        {isLoading && <div className="loading-indicator">🔄 Loading service data...</div>}
       </div>
 
       <ConnectionStatus 
@@ -238,6 +189,7 @@ const Demo = () => {
         lastUpdate={lastUpdate}
         onManualRefresh={handleManualRefresh}
         apiStatus={apiStatus}
+        isLoading={isLoading}
       />
 
       <DemoControls 
@@ -270,22 +222,17 @@ const Demo = () => {
               </div>
             </div>
           ))}
+          {services.length === 0 && !isLoading && (
+            <div className="no-data">No service data available</div>
+          )}
         </div>
       </div>
 
-      <DemoMetrics data={data} services={services} />
+      <DemoMetrics data={data} services={services} isLoading={isLoading} />
 
-      <DataGrid data={data} services={services} />
+      <DataGrid data={data} services={services} isLoading={isLoading} />
 
       <style jsx>{`
-        .loading-indicator {
-          background: #e3f2fd;
-          padding: 10px;
-          border-radius: 4px;
-          text-align: center;
-          margin: 10px 0;
-          color: #1976d2;
-        }
         .services-container {
           margin: 20px 0;
           background: white;
@@ -293,18 +240,21 @@ const Demo = () => {
           padding: 20px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        
         .services-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 20px;
           margin-top: 15px;
         }
+        
         .service-card {
           border: 1px solid #e1e5e9;
           border-radius: 8px;
           padding: 15px;
           background: #f8f9fa;
         }
+        
         .service-header {
           display: flex;
           justify-content: space-between;
@@ -313,11 +263,13 @@ const Demo = () => {
           padding-bottom: 10px;
           border-bottom: 1px solid #dee2e6;
         }
+        
         .service-header h4 {
           margin: 0;
           text-transform: capitalize;
           color: #2c3e50;
         }
+        
         .service-asset-count {
           background: #e3f2fd;
           padding: 4px 12px;
@@ -325,11 +277,13 @@ const Demo = () => {
           font-size: 12px;
           color: #1976d2;
         }
+        
         .assets-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 10px;
         }
+        
         .asset-item {
           padding: 10px;
           border: 1px solid #e9ecef;
@@ -337,21 +291,32 @@ const Demo = () => {
           text-align: center;
           background: white;
         }
+        
         .asset-id {
           font-weight: 600;
           font-size: 12px;
           color: #6c757d;
           text-transform: uppercase;
         }
+        
         .asset-value {
           font-size: 18px;
           font-weight: 700;
           color: #1976d2;
           margin: 8px 0;
         }
+        
         .asset-timestamp {
           font-size: 10px;
           color: #adb5bd;
+        }
+        
+        .no-data {
+          grid-column: 1 / -1;
+          text-align: center;
+          padding: 40px;
+          color: #6c757d;
+          font-style: italic;
         }
       `}</style>
     </>

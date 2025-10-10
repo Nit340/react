@@ -2,7 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 
-const EnergyCharts = () => {
+const EnergyCharts = ({ energyData = [] }) => {
   const powerChartRef = useRef(null);
   const currentChartRef = useRef(null);
   const voltageChartRef = useRef(null);
@@ -13,39 +13,111 @@ const EnergyCharts = () => {
   const chartInstances = useRef([]);
 
   useEffect(() => {
-    // Sample data for charts
-    const timeLabels = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
-    
-    const energyData = {
-      hoist: {
-        power: [8.2, 7.8, 7.5, 8.0, 12.5, 14.2, 15.0, 14.8, 13.5, 10.2, 8.5, 7.8],
-        current: [18.5, 17.6, 16.9, 18.0, 28.2, 32.0, 33.8, 33.3, 30.4, 23.0, 19.2, 17.6],
-        voltage: [415, 418, 415, 412, 410, 408, 405, 403, 400, 398, 415, 418],
-        energy: [16.4, 15.6, 15.0, 16.0, 25.0, 28.4, 30.0, 29.6, 27.0, 20.4, 17.0, 15.6],
-        cost: [2.46, 2.34, 2.25, 2.40, 3.75, 4.26, 4.50, 4.44, 4.05, 3.06, 2.55, 2.34]
-      },
-      travel: {
-        power: [5.5, 5.2, 5.0, 5.3, 8.2, 9.5, 10.2, 9.8, 9.0, 6.8, 5.7, 5.3],
-        current: [12.4, 11.7, 11.3, 11.9, 18.5, 21.4, 23.0, 22.1, 20.3, 15.3, 12.8, 11.9],
-        voltage: [408, 410, 405, 402, 400, 398, 395, 392, 390, 388, 408, 410],
-        energy: [11.0, 10.4, 10.0, 10.6, 16.4, 19.0, 20.4, 19.6, 18.0, 13.6, 11.4, 10.6],
-        cost: [1.65, 1.56, 1.50, 1.59, 2.46, 2.85, 3.06, 2.94, 2.70, 2.04, 1.71, 1.59]
-      },
-      trolley: {
-        power: [4.8, 4.5, 4.3, 4.6, 7.0, 8.2, 8.8, 8.5, 7.8, 5.9, 5.0, 4.6],
-        current: [10.8, 10.1, 9.7, 10.4, 15.8, 18.5, 19.8, 19.1, 17.6, 13.3, 11.3, 10.4],
-        voltage: [419, 417, 415, 412, 410, 408, 405, 403, 400, 398, 419, 417],
-        energy: [9.6, 9.0, 8.6, 9.2, 14.0, 16.4, 17.6, 17.0, 15.6, 11.8, 10.0, 9.2],
-        cost: [1.44, 1.35, 1.29, 1.38, 2.10, 2.46, 2.64, 2.55, 2.34, 1.77, 1.50, 1.38]
-      }
+    // Process real energy data for charts with stable data
+    const processChartData = () => {
+      // Get last 20 records for charts for better performance
+      const recentData = energyData.slice(0, 20);
+      
+      // Sort by timestamp to ensure chronological order
+      const sortedData = [...recentData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      const timeLabels = sortedData.map(item => {
+        const date = new Date(item.timestamp);
+        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      });
+
+      const chartData = {
+        hoist: {
+          power: [],
+          current: [],
+          voltage: [],
+          energy: [],
+          cost: []
+        },
+        ct: {
+          power: [],
+          current: [],
+          voltage: [],
+          energy: [],
+          cost: []
+        },
+        lt: {
+          power: [],
+          current: [],
+          voltage: [],
+          energy: [],
+          cost: []
+        }
+      };
+
+      // Group data by motor type with proper time alignment
+      sortedData.forEach(item => {
+        const dataPoint = {
+          power: item.power,
+          current: item.current,
+          voltage: item.voltage,
+          energy: parseFloat(item.energy),
+          cost: parseFloat(item.cost)
+        };
+
+        switch(item.motorType) {
+          case 'Hoist':
+            chartData.hoist.power.push(dataPoint.power);
+            chartData.hoist.current.push(dataPoint.current);
+            chartData.hoist.voltage.push(dataPoint.voltage);
+            chartData.hoist.energy.push(dataPoint.energy);
+            chartData.hoist.cost.push(dataPoint.cost);
+            break;
+          case 'CT':
+            chartData.ct.power.push(dataPoint.power);
+            chartData.ct.current.push(dataPoint.current);
+            chartData.ct.voltage.push(dataPoint.voltage);
+            chartData.ct.energy.push(dataPoint.energy);
+            chartData.ct.cost.push(dataPoint.cost);
+            break;
+          case 'LT':
+            chartData.lt.power.push(dataPoint.power);
+            chartData.lt.current.push(dataPoint.current);
+            chartData.lt.voltage.push(dataPoint.voltage);
+            chartData.lt.energy.push(dataPoint.energy);
+            chartData.lt.cost.push(dataPoint.cost);
+            break;
+        }
+      });
+
+      return { timeLabels, chartData };
     };
+
+    const { timeLabels, chartData } = processChartData();
+
+    // Calculate stable efficiency from recent data
+    const calculateEfficiency = () => {
+      if (energyData.length === 0) return 87;
+      
+      // Use average of last 5 records for stability
+      const recentRecords = energyData.slice(0, 5);
+      if (recentRecords.length === 0) return 87;
+      
+      const avgPower = recentRecords.reduce((sum, item) => sum + item.power, 0) / recentRecords.length;
+      const avgCurrent = recentRecords.reduce((sum, item) => sum + item.current, 0) / recentRecords.length;
+      
+      if (avgCurrent === 0) return 87;
+      
+      const avgVoltage = 400;
+      const apparentPower = (avgVoltage * avgCurrent) / 1000;
+      const powerFactor = apparentPower > 0 ? avgPower / apparentPower : 0.85;
+      
+      return Math.min(95, Math.max(75, 85 + (powerFactor * 8)));
+    };
+
+    const currentEfficiency = calculateEfficiency();
 
     // Destroy existing charts
     chartInstances.current.forEach(chart => chart && chart.destroy());
     chartInstances.current = [];
 
     // Power Consumption Chart
-    if (powerChartRef.current) {
+    if (powerChartRef.current && timeLabels.length > 0) {
       const ctx = powerChartRef.current.getContext('2d');
       const chart = new Chart(ctx, {
         type: "line",
@@ -54,27 +126,39 @@ const EnergyCharts = () => {
           datasets: [
             {
               label: 'Hoist Motor',
-              data: energyData.hoist.power,
+              data: chartData.hoist.power,
               borderColor: '#3498db',
               backgroundColor: 'rgba(52, 152, 219, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#3498db',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Travel Motor',
-              data: energyData.travel.power,
+              label: 'CT Motor',
+              data: chartData.ct.power,
               borderColor: '#2ecc71',
               backgroundColor: 'rgba(46, 204, 113, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#2ecc71',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Trolley Motor',
-              data: energyData.trolley.power,
+              label: 'LT Motor',
+              data: chartData.lt.power,
               borderColor: '#f39c12',
               backgroundColor: 'rgba(243, 156, 18, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#f39c12',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             }
           ]
         },
@@ -82,12 +166,47 @@ const EnergyCharts = () => {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'top' },
-            tooltip: { mode: 'index', intersect: false }
+            legend: { 
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                padding: 15
+              }
+            },
+            tooltip: { 
+              mode: 'index', 
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 10,
+              cornerRadius: 4
+            }
           },
           scales: {
-            y: { title: { display: true, text: 'Power (kW)' } },
-            x: { title: { display: true, text: 'Time of Day' } }
+            y: { 
+              beginAtZero: true,
+              title: { 
+                display: true, 
+                text: 'Power (kW)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.1)'
+              }
+            },
+            x: { 
+              title: { 
+                display: true, 
+                text: 'Time',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            }
+          },
+          animation: {
+            duration: 1000, // Smooth animation
+            easing: 'easeOutQuart'
           }
         }
       });
@@ -95,7 +214,7 @@ const EnergyCharts = () => {
     }
 
     // Current Draw Chart
-    if (currentChartRef.current) {
+    if (currentChartRef.current && timeLabels.length > 0) {
       const ctx = currentChartRef.current.getContext('2d');
       const chart = new Chart(ctx, {
         type: "line",
@@ -104,27 +223,39 @@ const EnergyCharts = () => {
           datasets: [
             {
               label: 'Hoist Motor',
-              data: energyData.hoist.current,
+              data: chartData.hoist.current,
               borderColor: '#3498db',
               backgroundColor: 'rgba(52, 152, 219, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#3498db',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Travel Motor',
-              data: energyData.travel.current,
+              label: 'CT Motor',
+              data: chartData.ct.current,
               borderColor: '#2ecc71',
               backgroundColor: 'rgba(46, 204, 113, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#2ecc71',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Trolley Motor',
-              data: energyData.trolley.current,
+              label: 'LT Motor',
+              data: chartData.lt.current,
               borderColor: '#f39c12',
               backgroundColor: 'rgba(243, 156, 18, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#f39c12',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             }
           ]
         },
@@ -132,12 +263,47 @@ const EnergyCharts = () => {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'top' },
-            tooltip: { mode: 'index', intersect: false }
+            legend: { 
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                padding: 15
+              }
+            },
+            tooltip: { 
+              mode: 'index', 
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 10,
+              cornerRadius: 4
+            }
           },
           scales: {
-            y: { title: { display: true, text: 'Current (A)' } },
-            x: { title: { display: true, text: 'Time of Day' } }
+            y: { 
+              beginAtZero: true,
+              title: { 
+                display: true, 
+                text: 'Current (A)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.1)'
+              }
+            },
+            x: { 
+              title: { 
+                display: true, 
+                text: 'Time',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            }
+          },
+          animation: {
+            duration: 1000,
+            easing: 'easeOutQuart'
           }
         }
       });
@@ -145,7 +311,7 @@ const EnergyCharts = () => {
     }
 
     // Voltage Levels Chart
-    if (voltageChartRef.current) {
+    if (voltageChartRef.current && timeLabels.length > 0) {
       const ctx = voltageChartRef.current.getContext('2d');
       const chart = new Chart(ctx, {
         type: "line",
@@ -154,27 +320,39 @@ const EnergyCharts = () => {
           datasets: [
             {
               label: 'Hoist Motor',
-              data: energyData.hoist.voltage,
+              data: chartData.hoist.voltage,
               borderColor: '#3498db',
               backgroundColor: 'rgba(52, 152, 219, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#3498db',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Travel Motor',
-              data: energyData.travel.voltage,
+              label: 'CT Motor',
+              data: chartData.ct.voltage,
               borderColor: '#2ecc71',
               backgroundColor: 'rgba(46, 204, 113, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#2ecc71',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             },
             {
-              label: 'Trolley Motor',
-              data: energyData.trolley.voltage,
+              label: 'LT Motor',
+              data: chartData.lt.voltage,
               borderColor: '#f39c12',
               backgroundColor: 'rgba(243, 156, 18, 0.1)',
-              tension: 0.4,
-              fill: true
+              tension: 0.3,
+              fill: true,
+              pointBackgroundColor: '#f39c12',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 4
             }
           ]
         },
@@ -182,16 +360,48 @@ const EnergyCharts = () => {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'top' },
-            tooltip: { mode: 'index', intersect: false }
+            legend: { 
+              position: 'top',
+              labels: {
+                usePointStyle: true,
+                padding: 15
+              }
+            },
+            tooltip: { 
+              mode: 'index', 
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 10,
+              cornerRadius: 4
+            }
           },
           scales: {
             y: { 
-              min: 350, 
-              max: 460,
-              title: { display: true, text: 'Voltage (V)' } 
+              min: 380, 
+              max: 420,
+              title: { 
+                display: true, 
+                text: 'Voltage (V)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.1)'
+              }
             },
-            x: { title: { display: true, text: 'Time of Day' } }
+            x: { 
+              title: { 
+                display: true, 
+                text: 'Time',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            }
+          },
+          animation: {
+            duration: 1000,
+            easing: 'easeOutQuart'
           }
         }
       });
@@ -206,18 +416,36 @@ const EnergyCharts = () => {
         data: {
           labels: ['Efficiency', 'Loss'],
           datasets: [{
-            data: [87, 13],
+            data: [currentEfficiency, 100 - currentEfficiency],
             backgroundColor: ['#2ecc71', '#e74c3c'],
-            borderWidth: 0
+            borderWidth: 0,
+            hoverOffset: 8
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          cutout: '80%',
+          cutout: '70%',
           plugins: {
-            legend: { display: false },
-            tooltip: { enabled: false }
+            legend: { 
+              display: true,
+              position: 'bottom',
+              labels: {
+                padding: 15,
+                usePointStyle: true
+              }
+            },
+            tooltip: { 
+              callbacks: {
+                label: function(context) {
+                  return `${context.label}: ${context.parsed}%`;
+                }
+              }
+            }
+          },
+          animation: {
+            animateScale: true,
+            animateRotate: true
           }
         }
       });
@@ -227,86 +455,104 @@ const EnergyCharts = () => {
     // Daily Energy Cost Chart
     if (costChartRef.current) {
       const ctx = costChartRef.current.getContext('2d');
+      
+      // Calculate daily costs from energy data
+      const dailyCosts = {
+        hoist: chartData.hoist.cost.reduce((sum, cost) => sum + cost, 0),
+        ct: chartData.ct.cost.reduce((sum, cost) => sum + cost, 0),
+        lt: chartData.lt.cost.reduce((sum, cost) => sum + cost, 0)
+      };
+
       const chart = new Chart(ctx, {
         type: "bar",
         data: {
-          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-          datasets: [
-            {
-              label: 'Hoist Motor',
-              data: [18.45, 19.20, 17.85, 20.10, 22.35, 15.60, 12.30],
-              backgroundColor: '#3498db'
-            },
-            {
-              label: 'Travel Motor',
-              data: [12.30, 12.80, 11.90, 13.40, 14.90, 10.40, 8.20],
-              backgroundColor: '#2ecc71'
-            },
-            {
-              label: 'Trolley Motor',
-              data: [10.80, 11.20, 10.40, 11.75, 13.05, 9.10, 7.20],
-              backgroundColor: '#f39c12'
-            }
-          ]
+          labels: ['Hoist', 'CT', 'LT'],
+          datasets: [{
+            label: 'Energy Cost ($)',
+            data: [dailyCosts.hoist, dailyCosts.ct, dailyCosts.lt],
+            backgroundColor: ['#3498db', '#2ecc71', '#f39c12'],
+            borderColor: ['#2980b9', '#27ae60', '#d35400'],
+            borderWidth: 1,
+            borderRadius: 4
+          }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'top' },
-            tooltip: { mode: 'index', intersect: false }
+            legend: { display: false }
           },
           scales: {
             y: { 
               beginAtZero: true,
-              title: { display: true, text: 'Cost ($)' } 
+              title: { 
+                display: true, 
+                text: 'Cost ($)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.1)'
+              }
             },
             x: { 
-              stacked: false,
-              title: { display: true, text: 'Day of Week' } 
+              grid: { display: false }
             }
+          },
+          animation: {
+            duration: 1000
           }
         }
       });
       chartInstances.current.push(chart);
     }
 
-    // Energy vs Load Weight Chart
+    // Energy Load Distribution Chart
     if (energyLoadChartRef.current) {
       const ctx = energyLoadChartRef.current.getContext('2d');
+      
+      // Calculate total energy consumption by motor type
+      const totalEnergy = {
+        hoist: chartData.hoist.energy.reduce((sum, energy) => sum + energy, 0),
+        ct: chartData.ct.energy.reduce((sum, energy) => sum + energy, 0),
+        lt: chartData.lt.energy.reduce((sum, energy) => sum + energy, 0)
+      };
+
       const chart = new Chart(ctx, {
-        type: "line",
+        type: "pie",
         data: {
-          labels: ['0', '5', '10', '15', '20', '25', '30', '35', '40'],
-          datasets: [
-            {
-              label: 'Energy Consumption (kWh)',
-              data: [0, 5.2, 10.5, 15.8, 21.2, 26.5, 31.8, 37.2, 42.5],
-              borderColor: '#3498db',
-              backgroundColor: 'rgba(52, 152, 219, 0.1)',
-              tension: 0.4,
-              fill: true
-            }
-          ]
+          labels: ['Hoist Motor', 'CT Motor', 'LT Motor'],
+          datasets: [{
+            data: [totalEnergy.hoist, totalEnergy.ct, totalEnergy.lt],
+            backgroundColor: ['#3498db', '#2ecc71', '#f39c12'],
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            hoverOffset: 12
+          }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'top' },
-            tooltip: {
-              mode: 'index',
-              intersect: false,
+            legend: { 
+              position: 'bottom',
+              labels: {
+                padding: 15,
+                usePointStyle: true
+              }
+            },
+            tooltip: { 
               callbacks: {
                 label: function(context) {
-                  return `${context.dataset.label}: ${context.parsed.y} kWh at ${context.parsed.x} tons`;
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                  const percentage = Math.round((context.parsed / total) * 100);
+                  return `${context.label}: ${context.parsed.toFixed(1)} kWh (${percentage}%)`;
                 }
               }
             }
           },
-          scales: {
-            y: { title: { display: true, text: 'Energy Consumption (kWh)' } },
-            x: { title: { display: true, text: 'Load Weight (tons)' } }
+          animation: {
+            animateScale: true,
+            animateRotate: true
           }
         }
       });
@@ -315,56 +561,79 @@ const EnergyCharts = () => {
 
     return () => {
       chartInstances.current.forEach(chart => chart && chart.destroy());
+      chartInstances.current = [];
     };
-  }, []);
+  }, [energyData]);
 
   return (
-    <div className="chart-grid">
-      {/* Power Consumption Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Power Consumption</div>
-        <div className="chart-wrapper">
-          <canvas ref={powerChartRef}></canvas>
-        </div>
-      </div>
+    <div className="energy-charts">
+      <h2 className="section-title">Energy Analytics</h2>
       
-      {/* Current Draw Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Current Draw</div>
-        <div className="chart-wrapper">
-          <canvas ref={currentChartRef}></canvas>
+      <div className="charts-grid">
+        {/* Power Consumption Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Power Consumption</h3>
+            <span className="chart-subtitle">Real-time Power (kW)</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={powerChartRef}></canvas>
+          </div>
         </div>
-      </div>
-      
-      {/* Voltage Levels Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Voltage Levels</div>
-        <div className="chart-wrapper">
-          <canvas ref={voltageChartRef}></canvas>
+
+        {/* Current Draw Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Current Draw</h3>
+            <span className="chart-subtitle">Motor Current (A)</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={currentChartRef}></canvas>
+          </div>
         </div>
-      </div>
-      
-      {/* Energy Efficiency Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Energy Efficiency</div>
-        <div className="chart-wrapper">
-          <canvas ref={efficiencyChartRef}></canvas>
+
+        {/* Voltage Levels Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Voltage Levels</h3>
+            <span className="chart-subtitle">Supply Voltage (V)</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={voltageChartRef}></canvas>
+          </div>
         </div>
-      </div>
-      
-      {/* Daily Energy Cost Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Daily Energy Cost</div>
-        <div className="chart-wrapper">
-          <canvas ref={costChartRef}></canvas>
+
+        {/* Energy Efficiency Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Energy Efficiency</h3>
+            <span className="chart-subtitle">Overall System Efficiency</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={efficiencyChartRef}></canvas>
+          </div>
         </div>
-      </div>
-      
-      {/* Energy vs Load Weight Chart */}
-      <div className="chart-container">
-        <div className="chart-title">Energy vs Load Weight</div>
-        <div className="chart-wrapper">
-          <canvas ref={energyLoadChartRef}></canvas>
+
+        {/* Daily Energy Cost Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Daily Energy Cost</h3>
+            <span className="chart-subtitle">Cost Distribution by Motor</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={costChartRef}></canvas>
+          </div>
+        </div>
+
+        {/* Energy Load Distribution Chart */}
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3>Energy Load Distribution</h3>
+            <span className="chart-subtitle">Energy Consumption by Motor</span>
+          </div>
+          <div className="chart-container">
+            <canvas ref={energyLoadChartRef}></canvas>
+          </div>
         </div>
       </div>
     </div>

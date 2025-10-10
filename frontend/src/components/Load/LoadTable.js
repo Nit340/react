@@ -1,3 +1,4 @@
+
 // components/Load/LoadTable.js
 import React from 'react';
 
@@ -35,21 +36,29 @@ const LoadTable = ({ loadData }) => {
           </tr>
         </thead>
         <tbody>
-          {loadData.map(item => (
-            <tr key={item.id}>
-              <td>{item.timestamp}</td>
-              <td>{item.craneId}</td>
-              <td>{item.operation}</td>
-              <td>{item.load}</td>
-              <td>{item.capacity}</td>
-              <td>{item.percentage}</td>
-              <td>
-                <span className={`load-status ${getStatusClass(item.status)}`}>
-                  {getStatusLabel(item.status)}
-                </span>
+          {loadData.length > 0 ? (
+            loadData.map(item => (
+              <tr key={item.id}>
+                <td>{item.timestamp}</td>
+                <td>{item.craneId}</td>
+                <td>{item.operation}</td>
+                <td>{item.load.toLocaleString()}</td>
+                <td>{item.capacity.toLocaleString()}</td>
+                <td>{item.percentage}%</td>
+                <td>
+                  <span className={`load-status ${getStatusClass(item.status)}`}>
+                    {getStatusLabel(item.status)}
+                  </span>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="7" className="no-data">
+                No load data available
               </td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
     </div>

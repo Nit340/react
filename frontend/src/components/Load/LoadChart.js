@@ -2,72 +2,40 @@
 import React, { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 
-const LoadChart = () => {
+const LoadChart = ({ loadData }) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
   useEffect(() => {
-    if (chartRef.current) {
+    if (chartRef.current && loadData.length > 0) {
       // Destroy existing chart
       if (chartInstance.current) {
         chartInstance.current.destroy();
       }
 
+      // Get last 10 data points for the chart (most recent first)
+      const chartDataPoints = loadData.slice(0, 10).reverse();
+      
       const ctx = chartRef.current.getContext('2d');
       chartInstance.current = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: ['8 AM', '10 AM', '12 PM', '2 PM', '4 PM'],
+          labels: chartDataPoints.map(item => {
+            // Extract time from timestamp (HH:MM:SS format)
+            const timePart = item.timestamp.split(' ')[1];
+            return timePart || item.timestamp;
+          }),
           datasets: [
             {
-              label: 'CRN-001 (5T)',
-              data: [45, 65, 72, 68, 55],
+              label: 'Load Percentage',
+              data: chartDataPoints.map(item => item.percentage),
               borderColor: '#3498db',
-              backgroundColor: 'transparent',
+              backgroundColor: 'rgba(52, 152, 219, 0.1)',
               borderWidth: 3,
               pointRadius: 4,
               pointHoverRadius: 6,
-              tension: 0.1
-            },
-            {
-              label: 'CRN-002 (10T)',
-              data: [38, 48, 52, 85, 92],
-              borderColor: '#2ecc71',
-              backgroundColor: 'transparent',
-              borderWidth: 3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              tension: 0.1
-            },
-            {
-              label: 'CRN-003 (5T)',
-              data: [65, 72, 90, 104, 85],
-              borderColor: '#e74c3c',
-              backgroundColor: 'transparent',
-              borderWidth: 3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              tension: 0.1
-            },
-            {
-              label: 'CRN-004 (6T)',
-              data: [55, 92, 85, 95, 80],
-              borderColor: '#f39c12',
-              backgroundColor: 'transparent',
-              borderWidth: 3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              tension: 0.1
-            },
-            {
-              label: 'CRN-005 (8T)',
-              data: [40, 85, 75, 94, 70],
-              borderColor: '#9b59b6',
-              backgroundColor: 'transparent',
-              borderWidth: 3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              tension: 0.1
+              tension: 0.1,
+              fill: true
             }
           ]
         },
@@ -104,7 +72,7 @@ const LoadChart = () => {
             x: {
               title: {
                 display: true,
-                text: 'Time of Day',
+                text: 'Time',
                 font: {
                   weight: 'bold',
                   size: 13
@@ -149,11 +117,11 @@ const LoadChart = () => {
         chartInstance.current.destroy();
       }
     };
-  }, []);
+  }, [loadData]);
 
   return (
     <div className="chart-container">
-      <h3>Five Crane Load Comparison</h3>
+      <h3>Load Percentage Over Time</h3>
       <div className="chart-wrapper">
         <canvas ref={chartRef}></canvas>
       </div>

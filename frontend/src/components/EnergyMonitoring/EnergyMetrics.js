@@ -16,7 +16,7 @@ const EnergyMetrics = ({ metrics }) => {
           <i className="fas fa-money-bill-wave"></i>
         </div>
         <div className="summary-card-value">{metrics.energyCost}</div>
-        <div className="summary-card-label">Hourly Energy Cost</div>
+        <div className="summary-card-label">Daily Energy Cost</div>
       </div>
       <div className="summary-card">
         <div className="summary-card-icon">

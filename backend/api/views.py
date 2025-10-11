@@ -208,7 +208,7 @@ async def websocket_iot(request):
 # views.py - Update the configuration section
 # ==================== CONFIGURATION ====================
 # Only for service config endpoints - Flask server
-EXTERNAL_SERVER_GET_BASE_URL = "http://10.208.108.87:5000"
+EXTERNAL_SERVER_GET_BASE_URL = "http://172.28.176.174:5000"
 
 # Update the get_crane_config_proxy function:
 @require_http_methods(["GET"])

@@ -3,52 +3,150 @@ import React, { useState, useMemo } from 'react';
 
 const EnergyTable = ({ energyData = [] }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+  const [hoveredRow, setHoveredRow] = useState(null);
 
-  // Filter to show only distinct values and last 12 records
-  const getFilteredData = () => {
-    const distinctData = [];
-    const seenValues = new Set();
-    
-    // Process data in chronological order to ensure no important events are missed
-    for (let i = energyData.length - 1; i >= 0; i--) {
-      const item = energyData[i];
-      
-      // For warning or offline status, always show them regardless of duplicate values
-      const isImportantEvent = item.status === 'warning' || 
-                              item.status === 'offline';
-      
-      // Create a unique key - be more lenient for important events
-      const valueKey = isImportantEvent ? 
-        `${item.power}-${item.current}-${item.voltage}-${item.status}-${item.timestamp}` : // Include timestamp for important events
-        `${item.power}-${item.current}-${item.voltage}-${item.status}`;
-      
-      // Only add if we haven't seen this combination before, or if it's an important event
-      if (!seenValues.has(valueKey) || isImportantEvent) {
-        if (!isImportantEvent) {
-          seenValues.add(valueKey);
-        }
-        distinctData.unshift(item); // Add to beginning to maintain chronological order
-        
-        // Stop when we have 12 distinct records
-        if (distinctData.length >= 12 && !isImportantEvent) break;
-      }
+  const styles = {
+    energyTable: {
+      backgroundColor: '#fff',
+      borderRadius: '12px',
+      boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
+      margin: '20px 0',
+      overflow: 'hidden'
+    },
+    tableHeader: {
+      padding: '20px 25px',
+      borderBottom: '2px solid #f0f0f0',
+      backgroundColor: '#fafafa'
+    },
+    tableTitle: {
+      margin: '0 0 8px 0',
+      fontSize: '1.5rem',
+      fontWeight: '600',
+      color: '#2c3e50'
+    },
+    tableInfo: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    recordCount: {
+      fontSize: '0.9rem',
+      color: '#7f8c8d',
+      fontWeight: '500'
+    },
+    tableContainer: {
+      overflowX: 'auto'
+    },
+    dataTable: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: '0.9rem'
+    },
+    tableHead: {
+      backgroundColor: '#34495e'
+    },
+    tableHeaderCell: {
+      padding: '16px 12px',
+      textAlign: 'left',
+      borderBottom: '2px solid #2c3e50',
+      color: 'white',
+      fontWeight: '600',
+      fontSize: '0.85rem',
+      cursor: 'pointer',
+      transition: 'background-color 0.2s ease',
+      userSelect: 'none'
+    },
+    tableHeaderCellHover: {
+      backgroundColor: '#2c3e50'
+    },
+    tableRow: {
+      borderBottom: '1px solid #ecf0f1',
+      transition: 'all 0.2s ease'
+    },
+    tableRowHover: {
+      backgroundColor: '#f8f9fa',
+      transform: 'scale(1.002)'
+    },
+    tableCell: {
+      padding: '14px 12px',
+      textAlign: 'left',
+      borderBottom: '1px solid #ecf0f1'
+    },
+    motorBadge: {
+      padding: '4px 12px',
+      borderRadius: '20px',
+      fontSize: '0.8rem',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    motorHoist: {
+      backgroundColor: '#e8f4fd',
+      color: '#2980b9',
+      border: '1px solid #3498db'
+    },
+    motorCT: {
+      backgroundColor: '#eafaf1',
+      color: '#27ae60',
+      border: '1px solid #2ecc71'
+    },
+    motorLT: {
+      backgroundColor: '#fef9e7',
+      color: '#f39c12',
+      border: '1px solid #f1c40f'
+    },
+    statusBadge: {
+      padding: '6px 12px',
+      borderRadius: '20px',
+      fontSize: '0.8rem',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    statusEfficient: {
+      backgroundColor: '#d5f4e6',
+      color: '#27ae60'
+    },
+    statusNormal: {
+      backgroundColor: '#e8f4fd',
+      color: '#3498db'
+    },
+    statusWarning: {
+      backgroundColor: '#fdebd0',
+      color: '#e67e22'
+    },
+    statusOffline: {
+      backgroundColor: '#f2f3f4',
+      color: '#7f8c8d'
+    },
+    sortIcon: {
+      marginLeft: '5px',
+      fontSize: '0.8rem'
+    },
+    noDataContent: {
+      padding: '40px 20px',
+      textAlign: 'center',
+      color: '#95a5a6'
+    },
+    noDataIcon: {
+      fontSize: '3rem',
+      marginBottom: '15px',
+      display: 'block'
+    },
+    numericCell: {
+      fontFamily: "'Courier New', monospace",
+      fontWeight: '600',
+      color: '#2c3e50'
+    },
+    timestampCell: {
+      fontFamily: "'Courier New', monospace",
+      fontSize: '0.85rem',
+      color: '#34495e'
     }
-    
-    // If we have important events, make sure we show at least 12 records
-    if (distinctData.length < 12) {
-      const additionalNeeded = 12 - distinctData.length;
-      for (let i = energyData.length - 1; i >= 0 && additionalNeeded > 0; i--) {
-        const item = energyData[i];
-        if (!distinctData.find(existing => existing.id === item.id)) {
-          distinctData.unshift(item);
-        }
-      }
-    }
-    
-    return distinctData.slice(-12); // Ensure we only return last 12
   };
 
-  const filteredData = getFilteredData();
+  // Simply show the last 15 records without complex filtering
+  const filteredData = energyData.slice(0, 15);
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -57,6 +155,12 @@ const EnergyTable = ({ energyData = [] }) => {
       sortableData.sort((a, b) => {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
+
+        // Handle timestamp sorting
+        if (sortConfig.key === 'timestamp') {
+          aValue = new Date(a.timestamp.replace(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/, '$1/$2/$3 $4:$5:$6'));
+          bValue = new Date(b.timestamp.replace(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/, '$1/$2/$3 $4:$5:$6'));
+        }
 
         // Handle numeric values
         if (typeof aValue === 'number' && typeof bValue === 'number') {
@@ -75,6 +179,11 @@ const EnergyTable = ({ energyData = [] }) => {
           }
         }
 
+        // Handle date values
+        if (aValue instanceof Date && bValue instanceof Date) {
+          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+
         return 0;
       });
     }
@@ -90,107 +199,135 @@ const EnergyTable = ({ energyData = [] }) => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      efficient: { label: 'Efficient', className: 'status-efficient' },
-      normal: { label: 'Normal', className: 'status-normal' },
-      warning: { label: 'Warning', className: 'status-warning' },
-      offline: { label: 'Offline', className: 'status-offline' }
+      efficient: { label: 'Efficient', style: styles.statusEfficient },
+      normal: { label: 'Normal', style: styles.statusNormal },
+      warning: { label: 'Warning', style: styles.statusWarning },
+      offline: { label: 'Offline', style: styles.statusOffline }
     };
     
     const config = statusConfig[status] || statusConfig.normal;
-    return <span className={`status-badge ${config.className}`}>{config.label}</span>;
+    return (
+      <span style={{...styles.statusBadge, ...config.style}}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const getMotorBadge = (motorType) => {
+    const motorStyles = {
+      Hoist: styles.motorHoist,
+      CT: styles.motorCT,
+      LT: styles.motorLT
+    };
+    
+    return (
+      <span style={{...styles.motorBadge, ...motorStyles[motorType]}}>
+        {motorType}
+      </span>
+    );
   };
 
   const SortIcon = ({ columnKey }) => {
     if (sortConfig.key !== columnKey) {
-      return <span className="sort-icon">↕️</span>;
+      return <span style={styles.sortIcon}>↕️</span>;
     }
     return sortConfig.direction === 'asc' ? 
-      <span className="sort-icon">⬆️</span> : 
-      <span className="sort-icon">⬇️</span>;
+      <span style={styles.sortIcon}>⬆️</span> : 
+      <span style={styles.sortIcon}>⬇️</span>;
   };
 
   return (
-    <div className="energy-table">
-      <div className="table-header">
-        <h2>Energy Data Records</h2>
-        <div className="table-info">
-          <span className="record-count">
-            Showing last {sortedData.length} distinct energy records
+    <div style={styles.energyTable}>
+      <div style={styles.tableHeader}>
+      
+        <div style={styles.tableInfo}>
+          <span style={styles.recordCount}>
+            Showing last {sortedData.length} LOG
           </span>
         </div>
       </div>
 
-      <div className="table-container">
-        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={styles.tableContainer}>
+        <table style={styles.dataTable}>
           <thead>
-            <tr style={{ backgroundColor: '#f5f5f5' }}>
+            <tr style={styles.tableHead}>
               <th 
                 onClick={() => handleSort('timestamp')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Timestamp <SortIcon columnKey="timestamp" />
               </th>
               <th 
                 onClick={() => handleSort('craneId')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Crane ID <SortIcon columnKey="craneId" />
               </th>
               <th 
                 onClick={() => handleSort('motorType')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Motor Type <SortIcon columnKey="motorType" />
               </th>
               <th 
                 onClick={() => handleSort('power')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Power (kW) <SortIcon columnKey="power" />
               </th>
               <th 
                 onClick={() => handleSort('current')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Current (A) <SortIcon columnKey="current" />
               </th>
               <th 
                 onClick={() => handleSort('voltage')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Voltage (V) <SortIcon columnKey="voltage" />
               </th>
               <th 
                 onClick={() => handleSort('energy')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Energy (kWh) <SortIcon columnKey="energy" />
               </th>
               <th 
                 onClick={() => handleSort('cost')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Cost ($) <SortIcon columnKey="cost" />
               </th>
               <th 
                 onClick={() => handleSort('frequency')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Frequency (Hz) <SortIcon columnKey="frequency" />
               </th>
               <th 
                 onClick={() => handleSort('status')} 
-                className="sortable"
-                style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd', cursor: 'pointer' }}
+                style={styles.tableHeaderCell}
+                onMouseEnter={(e) => e.target.style.backgroundColor = styles.tableHeaderCellHover.backgroundColor}
+                onMouseLeave={(e) => e.target.style.backgroundColor = styles.tableHead.backgroundColor}
               >
                 Status <SortIcon columnKey="status" />
               </th>
@@ -198,29 +335,33 @@ const EnergyTable = ({ energyData = [] }) => {
           </thead>
           <tbody>
             {sortedData.length > 0 ? (
-              sortedData.map((record) => (
-                <tr key={record.id} className="data-row" style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.timestamp}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.craneId}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>
-                    <span className={`motor-badge motor-${record.motorType.toLowerCase()}`}>
-                      {record.motorType}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.power.toFixed(1)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.current.toFixed(1)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.voltage.toFixed(0)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.energy.toFixed(1)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>${record.cost.toFixed(2)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{record.frequency.toFixed(1)}</td>
-                  <td style={{ padding: '12px', textAlign: 'left' }}>{getStatusBadge(record.status)}</td>
+              sortedData.map((record, index) => (
+                <tr 
+                  key={record.id} 
+                  style={{
+                    ...styles.tableRow,
+                    ...(hoveredRow === index ? styles.tableRowHover : {})
+                  }}
+                  onMouseEnter={() => setHoveredRow(index)}
+                  onMouseLeave={() => setHoveredRow(null)}
+                >
+                  <td style={{...styles.tableCell, ...styles.timestampCell}}>{record.timestamp}</td>
+                  <td style={styles.tableCell}>{record.craneId}</td>
+                  <td style={styles.tableCell}>{getMotorBadge(record.motorType)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>{record.power.toFixed(1)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>{record.current.toFixed(1)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>{record.voltage.toFixed(0)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>{record.energy.toFixed(1)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>${record.cost.toFixed(2)}</td>
+                  <td style={{...styles.tableCell, ...styles.numericCell}}>{record.frequency.toFixed(1)}</td>
+                  <td style={styles.tableCell}>{getStatusBadge(record.status)}</td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="10" style={{ padding: '20px', textAlign: 'center', color: '#666', fontStyle: 'italic' }}>
-                  <div className="no-data-content">
-                    <span className="no-data-icon">📊</span>
+                <td colSpan="10" style={styles.tableCell}>
+                  <div style={styles.noDataContent}>
+                    <span style={styles.noDataIcon}>📊</span>
                     <p>No energy data available</p>
                     <small>Data will appear when modbus service is active</small>
                   </div>

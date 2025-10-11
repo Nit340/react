@@ -1,11 +1,9 @@
-
 // pages/Load.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import LoadMetrics from '../components/Load/LoadMetrics';
 import Filter from '../components/Filter';
 import LoadChart from '../components/Load/LoadChart';
 import LoadTable from '../components/Load/LoadTable';
-import ConnectionStatus from '../components/Demo/ConnectionStatus';
 import DemoControls from '../components/Demo/DemoControls';
 
 const Load = () => {
@@ -24,16 +22,23 @@ const Load = () => {
   const [filteredLoadData, setFilteredLoadData] = useState([]);
   const [showChart, setShowChart] = useState(false);
 
-  // Mode and connection states
+  // Mode state
   const [mode, setMode] = useState('polling');
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(1000);
-  const [apiStatus, setApiStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const ws = useRef(null);
   const pollingRef = useRef(null);
+
+  // Track previous values for onboard_io operations (EXACTLY like OperationsLog)
+  const previousValues = useRef({
+    Hoist_Up: 0,
+    Hoist_Down: 0,
+    Ct_Left: 0,
+    Ct_Right: 0,
+    Lt_Forward: 0,
+    Lt_Reverse: 0
+  });
 
   // Filter configuration for Load page
   const filterConfig = [
@@ -77,37 +82,131 @@ const Load = () => {
     }
   ];
 
-  // Process LoadCell service data
+  // Process LoadCell service data for metrics only
   const processLoadCellData = useCallback((serviceArray) => {
-    const loadReadings = {};
-    let timestamp = new Date().toISOString();
+    const loadReadings = {
+      currentLoad: 0,
+      capacity: 10000,
+      swingAngle: 0
+    };
 
     // Find LoadCell service
     const loadCellService = serviceArray.find(service => service.name === 'LoadCell');
     if (loadCellService) {
       loadCellService.assets.forEach(asset => {
-        const { id, value, timestamp: assetTimestamp } = asset;
+        const { id, value } = asset;
         
-        // Map datapoints to our load metrics
         switch(id) {
           case 'Load':
             loadReadings.currentLoad = parseFloat(value) || 0;
             break;
           case 'Load_Capacity':
-            loadReadings.capacity = parseFloat(value) || 10000; // Default 10,000 kg if not provided
+            loadReadings.capacity = parseFloat(value) || 10000;
             break;
           case 'Load_Swing_Angle':
             loadReadings.swingAngle = parseFloat(value) || 0;
             break;
         }
+      });
+    }
+
+    return loadReadings;
+  }, []);
+
+  // Process onboard_io service data for operations (EXACTLY like OperationsLog)
+  const processOnboardIOData = useCallback((serviceArray, currentLoad = 0, capacity = 10000) => {
+    const newOperations = [];
+    let timestamp = new Date().toISOString();
+
+    // Find onboard_io service and detect operations
+    const onboardIOService = serviceArray.find(service => service.name === 'onboard_io');
+    if (onboardIOService) {
+      onboardIOService.assets.forEach(asset => {
+        const { id, value, timestamp: assetTimestamp } = asset;
+        const prevValue = previousValues.current[id] || 0;
+
+        // Only process the specific datapoints we care about
+        const operationDatapoints = ['Hoist_Up', 'Hoist_Down', 'Ct_Left', 'Ct_Right', 'Lt_Forward', 'Lt_Reverse'];
         
-        if (assetTimestamp) {
-          timestamp = assetTimestamp;
+        if (operationDatapoints.includes(id)) {
+          // Detect operation triggers (edge detection: 0 -> 1) - SAME AS OPERATIONSLOG
+          if (prevValue === 0 && value === 1) {
+            let operationType = '';
+            let craneId = 'CRN-001';
+
+            // Map datapoint to operation type - SAME AS OPERATIONSLOG
+            switch(id) {
+              case 'Hoist_Up':
+                operationType = 'hoist-up';
+                break;
+              case 'Hoist_Down':
+                operationType = 'hoist-down';
+                break;
+              case 'Ct_Left':
+                operationType = 'ct-left';
+                break;
+              case 'Ct_Right':
+                operationType = 'ct-right';
+                break;
+              case 'Lt_Forward':
+                operationType = 'lt-forward';
+                break;
+              case 'Lt_Reverse':
+                operationType = 'lt-reverse';
+                break;
+              default:
+                return;
+            }
+
+            // Calculate load percentage for this operation
+            const loadPercentage = capacity > 0 ? (currentLoad / capacity) * 100 : 0;
+            
+            // Determine status based on load percentage
+            let status = 'normal';
+            if (currentLoad > 0) {
+              if (loadPercentage > 95) {
+                status = 'overload';
+              } else if (loadPercentage > 80) {
+                status = 'warning';
+              } else {
+                status = 'normal';
+              }
+            }
+
+            if (assetTimestamp) {
+              timestamp = assetTimestamp;
+            }
+
+            // Create operation record - SIMPLIFIED VERSION
+            const operation = {
+              id: `${timestamp}_${id}_${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: new Date(timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
+              craneId: craneId,
+              operation: operationType,
+              load: parseFloat(currentLoad.toFixed(0)),
+              capacity: parseFloat(capacity.toFixed(0)),
+              percentage: parseFloat(loadPercentage.toFixed(1)),
+              status: status
+            };
+
+            newOperations.push(operation);
+          }
+
+          // Update previous value
+          previousValues.current[id] = value;
         }
       });
     }
 
-    return { loadReadings, timestamp };
+    return newOperations;
   }, []);
 
   // Update metrics based on current load readings
@@ -151,56 +250,7 @@ const Load = () => {
     });
   }, []);
 
-  // Create load data record for table
-  const createLoadRecord = useCallback((loadReadings, timestamp) => {
-    const {
-      currentLoad = 0,
-      capacity = 10000,
-      swingAngle = 0
-    } = loadReadings;
-
-    // Calculate load percentage
-    const loadPercentage = capacity > 0 ? (currentLoad / capacity) * 100 : 0;
-
-    // Determine status based on load percentage
-    let status = 'normal';
-    let operation = 'Idle';
-
-    if (currentLoad > 0) {
-      if (loadPercentage > 95) {
-        status = 'overload';
-        operation = 'Overload Alert';
-      } else if (loadPercentage > 80) {
-        status = 'warning';
-        operation = 'High Load';
-      } else if (currentLoad > 0) {
-        status = 'normal';
-        operation = swingAngle > 10 ? 'Swinging Load' : 'Static Load';
-      }
-    }
-
-    // Only create record if there's actual load or significant swing
-    if (currentLoad > 0 || Math.abs(swingAngle) > 5) {
-      return {
-        id: `${timestamp}_load_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date(timestamp).toLocaleString('en-US', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
-        craneId: 'CRN-001', // Default crane, can be enhanced
-        operation: operation,
-        load: parseFloat(currentLoad.toFixed(0)),
-        capacity: parseFloat(capacity.toFixed(0)),
-        percentage: parseFloat(loadPercentage.toFixed(1)),
-        swingAngle: parseFloat(swingAngle.toFixed(1)),
-        status: status
-      };
-    }
-
-    return null;
-  }, []);
-
-  // Enhanced polling function
+  // Enhanced polling function with proper state handling
   const fetchData = useCallback(async () => {
     if (isLoading) return;
     
@@ -222,69 +272,49 @@ const Load = () => {
             services = result.data;
           }
 
-          // Filter to only use LoadCell service
+          // Use both LoadCell and onboard_io services
           const filteredServices = services.filter(service => 
-            service.name === 'LoadCell'
+            service.name === 'LoadCell' || service.name === 'onboard_io'
           );
 
           if (filteredServices.length > 0) {
-            // Process LoadCell data and extract load readings
-            const { loadReadings, timestamp } = processLoadCellData(filteredServices);
+            // Process LoadCell data for current load metrics
+            const loadReadings = processLoadCellData(filteredServices);
+            const currentLoad = loadReadings.currentLoad || 0;
+            const capacity = loadReadings.capacity || 10000;
 
-            // Create load data record for table
-            const newLoadRecord = createLoadRecord(loadReadings, timestamp);
+            // Process onboard_io data for operations (ONLY onboard_io, no created events)
+            const newOperations = processOnboardIOData(filteredServices, currentLoad, capacity);
 
-            if (newLoadRecord) {
-              // Update load data (keep last 100 records like OperationsLog)
+            if (newOperations.length > 0) {
+              // Update load data - keep last 100 records
               setLoadData(prev => {
-                const updatedData = [newLoadRecord, ...prev].slice(0, 100);
+                const updatedData = [...newOperations, ...prev].slice(0, 100);
                 // Update metrics with current readings and historical data
                 updateMetrics(loadReadings, updatedData);
                 return updatedData;
               });
             } else {
-              // Update metrics even if no new record (for current load display)
+              // Update metrics even if no new operations (for current load display)
               updateMetrics(loadReadings, loadData);
             }
-
-            setApiStatus(`${mode === 'polling' ? 'Polling' : 'Realtime'} - LoadCell service active`);
-          } else {
-            setApiStatus('No LoadCell service data available');
           }
-
-          setLastUpdate(new Date());
-          setIsConnected(true);
-        } else {
-          setApiStatus('Error: API returned unsuccessful response');
-          setIsConnected(false);
         }
-      } else {
-        setApiStatus(`HTTP Error: ${response.status}`);
-        setIsConnected(false);
       }
     } catch (error) {
-      setApiStatus(`Connection Error: ${error.message}`);
-      setIsConnected(false);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, mode, processLoadCellData, createLoadRecord, updateMetrics, loadData]);
+  }, [isLoading, processLoadCellData, processOnboardIOData, updateMetrics, loadData]);
 
   // WebSocket connection for realtime mode
   const connectWebSocket = useCallback(() => {
     try {
-      setApiStatus('Connecting to WebSocket...');
-      
       // Simulate WebSocket with rapid polling for service data
-      setIsConnected(true);
-      setApiStatus('Simulated WebSocket - LoadCell Data');
-      
       fetchData(); // Initial fetch
       pollingRef.current = setInterval(fetchData, 500);
-      
     } catch (error) {
-      setIsConnected(false);
-      setApiStatus('WebSocket setup error - Falling back to polling');
       setMode('polling');
     }
   }, [fetchData]);
@@ -302,13 +332,9 @@ const Load = () => {
       pollingRef.current = null;
     }
 
-    setIsConnected(false);
-    setApiStatus(`Initializing ${mode} mode...`);
-
     if (mode === 'polling') {
       fetchData();
       pollingRef.current = setInterval(fetchData, pollingInterval);
-      setApiStatus(`Polling active - ${pollingInterval/1000}s interval`);
     } else if (mode === 'realtime') {
       connectWebSocket();
     }
@@ -366,14 +392,6 @@ const Load = () => {
     setPollingInterval(interval);
   }, []);
 
-  // Manual refresh
-  const handleManualRefresh = useCallback(() => {
-    if (mode === 'polling') {
-      setApiStatus('Manual refresh...');
-      fetchData();
-    }
-  }, [mode, fetchData]);
-
   const handleFilterChange = useCallback((filterKey, value) => {
     setFilters(prev => ({
       ...prev,
@@ -409,16 +427,8 @@ const Load = () => {
     <>
       <div className="page-title">
         <h1>Load Lift Log</h1>
-        <p>Real-time load monitoring from LoadCell service</p>
+        <p>Real-time load monitoring during crane operations from onboard_io service</p>
       </div>
-
-      <ConnectionStatus 
-        mode={mode}
-        isConnected={isConnected}
-        lastUpdate={lastUpdate}
-        onManualRefresh={handleManualRefresh}
-        apiStatus={apiStatus}
-      />
 
       <DemoControls 
         mode={mode}

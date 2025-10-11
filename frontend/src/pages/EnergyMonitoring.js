@@ -4,7 +4,6 @@ import EnergyMetrics from '../components/EnergyMonitoring/EnergyMetrics';
 import Filter from '../components/Filter';
 import EnergyCharts from '../components/EnergyMonitoring/EnergyCharts';
 import EnergyTable from '../components/EnergyMonitoring/EnergyTable';
-import ConnectionStatus from '../components/Demo/ConnectionStatus';
 import DemoControls from '../components/Demo/DemoControls';
 
 const EnergyMonitoring = () => {
@@ -21,17 +20,53 @@ const EnergyMonitoring = () => {
     energyPerTon: '0 kWh/T'
   });
   const [energyData, setEnergyData] = useState([]);
+  const [showCharts, setShowCharts] = useState(false); // Start with charts hidden
 
-  // Mode and connection states
+  // Mode state
   const [mode, setMode] = useState('polling');
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [pollingInterval, setPollingInterval] = useState(5000); // Increased to 5 seconds
-  const [apiStatus, setApiStatus] = useState('');
+  const [pollingInterval, setPollingInterval] = useState(5000);
   const [isLoading, setIsLoading] = useState(false);
   
   const ws = useRef(null);
   const pollingRef = useRef(null);
+
+  // CSS Styles
+  const styles = {
+    pageContainer: {
+      padding: '20px',
+      backgroundColor: '#f8f9fa',
+      minHeight: '100vh',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    },
+    pageTitle: {
+      marginBottom: '30px',
+      padding: '25px',
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
+      borderLeft: '5px solid #3498db'
+    },
+    pageTitleH1: {
+      margin: '0 0 8px 0',
+      fontSize: '2.2rem',
+      fontWeight: '700',
+      color: '#2c3e50',
+      background: 'linear-gradient(135deg, #3498db 0%, #2c3e50 100%)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text'
+    },
+    pageSubtitle: {
+      margin: '0',
+      fontSize: '1.1rem',
+      color: '#7f8c8d',
+      fontWeight: '400'
+    },
+    chartsSection: {
+      marginBottom: '30px',
+      transition: 'all 0.3s ease'
+    }
+  };
 
   // Filter configuration for Energy Monitoring
   const filterConfig = [
@@ -91,7 +126,12 @@ const EnergyMonitoring = () => {
 
   // Process modbus service data and extract energy metrics
   const processModbusData = useCallback((serviceArray) => {
-    const energyReadings = {};
+    const motorData = {
+      hoist: { voltage: 0, current: 0, power: 0, frequency: 0 },
+      ct: { voltage: 0, current: 0, power: 0, frequency: 0 },
+      lt: { voltage: 0, current: 0, power: 0, frequency: 0 }
+    };
+    
     let timestamp = new Date().toISOString();
 
     // Find modbus service
@@ -100,43 +140,43 @@ const EnergyMonitoring = () => {
       modbusService.assets.forEach(asset => {
         const { id, value, timestamp: assetTimestamp } = asset;
         
-        // Map datapoints to our energy metrics
+        // Map datapoints to specific motors
         switch(id) {
           case 'Hoist_voltage':
-            energyReadings.hoistVoltage = parseFloat(value) || 0;
+            motorData.hoist.voltage = parseFloat(value) || 0;
             break;
           case 'Hoist_current':
-            energyReadings.hoistCurrent = parseFloat(value) || 0;
+            motorData.hoist.current = parseFloat(value) || 0;
             break;
           case 'Hoist_power':
-            energyReadings.hoistPower = parseFloat(value) || 0;
+            motorData.hoist.power = parseFloat(value) || 0;
             break;
           case 'Hoist_frequency':
-            energyReadings.hoistFrequency = parseFloat(value) || 0;
+            motorData.hoist.frequency = parseFloat(value) || 0;
             break;
           case 'Ct_voltage':
-            energyReadings.ctVoltage = parseFloat(value) || 0;
+            motorData.ct.voltage = parseFloat(value) || 0;
             break;
           case 'Ct_current':
-            energyReadings.ctCurrent = parseFloat(value) || 0;
+            motorData.ct.current = parseFloat(value) || 0;
             break;
           case 'Ct_power':
-            energyReadings.ctPower = parseFloat(value) || 0;
+            motorData.ct.power = parseFloat(value) || 0;
             break;
           case 'Ct_frequency':
-            energyReadings.ctFrequency = parseFloat(value) || 0;
+            motorData.ct.frequency = parseFloat(value) || 0;
             break;
           case 'Lt_voltage':
-            energyReadings.ltVoltage = parseFloat(value) || 0;
+            motorData.lt.voltage = parseFloat(value) || 0;
             break;
           case 'Lt_current':
-            energyReadings.ltCurrent = parseFloat(value) || 0;
+            motorData.lt.current = parseFloat(value) || 0;
             break;
           case 'Lt_power':
-            energyReadings.ltPower = parseFloat(value) || 0;
+            motorData.lt.power = parseFloat(value) || 0;
             break;
           case 'Lt_frequency':
-            energyReadings.ltFrequency = parseFloat(value) || 0;
+            motorData.lt.frequency = parseFloat(value) || 0;
             break;
         }
         
@@ -146,53 +186,40 @@ const EnergyMonitoring = () => {
       });
     }
 
-    return { energyReadings, timestamp };
+    return { motorData, timestamp };
   }, []);
 
   // More accurate electrical calculations
-  const updateMetrics = useCallback((energyReadings) => {
-    const {
-      hoistPower = 0,
-      ctPower = 0,
-      ltPower = 0,
-      hoistCurrent = 0,
-      ctCurrent = 0,
-      ltCurrent = 0,
-      hoistVoltage = 400,
-      ctVoltage = 400,
-      ltVoltage = 400
-    } = energyReadings;
+  const updateMetrics = useCallback((motorData) => {
+    const { hoist, ct, lt } = motorData;
 
-    // 1. TOTAL POWER CALCULATION (More Accurate)
-    const totalPower = hoistPower + ctPower + ltPower;
+    // Calculate actual power if not provided
+    const hoistPower = hoist.power > 0 ? hoist.power : (hoist.voltage * hoist.current * 0.85) / 1000;
+    const ctPower = ct.power > 0 ? ct.power : (ct.voltage * ct.current * 0.85) / 1000;
+    const ltPower = lt.power > 0 ? lt.power : (lt.voltage * lt.current * 0.85) / 1000;
     
-    // Alternative: Calculate power from voltage and current if power not provided
-    const calculatedHoistPower = hoistPower > 0 ? hoistPower : (hoistVoltage * hoistCurrent * 0.85) / 1000;
-    const calculatedCtPower = ctPower > 0 ? ctPower : (ctVoltage * ctCurrent * 0.85) / 1000;
-    const calculatedLtPower = ltPower > 0 ? ltPower : (ltVoltage * ltCurrent * 0.85) / 1000;
-    
-    const actualTotalPower = calculatedHoistPower + calculatedCtPower + calculatedLtPower;
+    const actualTotalPower = hoistPower + ctPower + ltPower;
 
-    // 2. ENERGY COST CALCULATION (More Realistic)
+    // ENERGY COST CALCULATION
     const electricityRate = 0.15; // $0.15 per kWh
     const operatingHours = 8; // Assume 8-hour operation day
     const dailyEnergy = actualTotalPower * operatingHours; // kWh per day
     const energyCost = dailyEnergy * electricityRate;
 
-    // 3. EFFICIENCY CALCULATION (More Technical)
-    const totalApparentPower = (hoistVoltage * hoistCurrent + ctVoltage * ctCurrent + ltVoltage * ltCurrent) / 1000; // kVA
+    // EFFICIENCY CALCULATION
+    const totalApparentPower = (hoist.voltage * hoist.current + ct.voltage * ct.current + lt.voltage * lt.current) / 1000; // kVA
     const powerFactor = totalApparentPower > 0 ? actualTotalPower / totalApparentPower : 0;
     
-    // Efficiency based on power factor and load (simplified motor efficiency curve)
+    // Efficiency based on power factor and load
     let efficiency = 0;
     if (actualTotalPower > 0) {
-      const loadFactor = Math.min(1, actualTotalPower / 50); // Assume 50kW max capacity
-      const baseEfficiency = 85 + (loadFactor * 10); // 85-95% range based on load
-      const powerFactorPenalty = (1 - powerFactor) * 10; // Penalty for poor power factor
+      const loadFactor = Math.min(1, actualTotalPower / 50);
+      const baseEfficiency = 85 + (loadFactor * 10);
+      const powerFactorPenalty = (1 - powerFactor) * 10;
       efficiency = Math.max(75, Math.min(95, baseEfficiency - powerFactorPenalty));
     }
 
-    // 4. ENERGY PER TON CALCULATION (Industry Standard)
+    // ENERGY PER TON CALCULATION
     const assumedLoad = 25; // Assume 25-ton average load
     const energyPerTon = actualTotalPower > 0 ? (dailyEnergy / assumedLoad).toFixed(1) : 0;
 
@@ -204,31 +231,14 @@ const EnergyMonitoring = () => {
     });
   }, []);
 
-  // Enhanced energy record creation with better calculations and duplicate prevention
-  const createEnergyRecord = useCallback((energyReadings, timestamp) => {
-    const {
-      hoistVoltage = 0,
-      hoistCurrent = 0,
-      hoistPower = 0,
-      hoistFrequency = 0,
-      ctVoltage = 0,
-      ctCurrent = 0,
-      ctPower = 0,
-      ctFrequency = 0,
-      ltVoltage = 0,
-      ltCurrent = 0,
-      ltPower = 0,
-      ltFrequency = 0
-    } = energyReadings;
+  // Create individual records for each motor with actual data
+  const createEnergyRecord = useCallback((motorData, timestamp) => {
+    const { hoist, ct, lt } = motorData;
 
-    // Calculate actual power if not provided
-    const calcHoistPower = hoistPower > 0 ? hoistPower : (hoistVoltage * hoistCurrent * 0.85) / 1000;
-    const calcCtPower = ctPower > 0 ? ctPower : (ctVoltage * ctCurrent * 0.85) / 1000;
-    const calcLtPower = ltPower > 0 ? ltPower : (ltVoltage * ltCurrent * 0.85) / 1000;
-
-    // Determine status based on industry standards
-    const getStatus = (power, current, voltage, frequency) => {
-      const powerFactor = (power * 1000) / (voltage * current);
+    // Determine status based on values
+    const getStatus = (motor) => {
+      const { power, current, voltage, frequency } = motor;
+      const powerFactor = voltage > 0 && current > 0 ? (power * 1000) / (voltage * current) : 0.85;
       
       if (current === 0 && power === 0) return 'offline';
       if (power > 20 || current > 35 || powerFactor < 0.7) return 'warning';
@@ -240,76 +250,60 @@ const EnergyMonitoring = () => {
     const electricityRate = 0.15; // $0.15 per kWh
     const operatingTime = 0.5; // Assume 30 minutes operation per record
 
-    // Create unique timestamp for each record to prevent duplicates
+    // Create unique timestamp for base time
     const baseTime = new Date(timestamp);
     
-    // Hoist motor record
-    if (calcHoistPower > 0 || hoistCurrent > 0) {
-      const uniqueTime = new Date(baseTime.getTime() + 1000); // Add 1 second for uniqueness
-      records.push({
-        id: `hoist_${uniqueTime.getTime()}`,
-        timestamp: uniqueTime.toLocaleString('en-US', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
-        craneId: 'CRN-001',
-        motorType: 'Hoist',
-        power: parseFloat(calcHoistPower.toFixed(1)),
-        current: parseFloat(hoistCurrent.toFixed(1)),
-        voltage: parseFloat(hoistVoltage.toFixed(0)),
-        energy: parseFloat((calcHoistPower * operatingTime).toFixed(1)),
-        cost: parseFloat(((calcHoistPower * operatingTime) * electricityRate).toFixed(2)),
-        frequency: parseFloat(hoistFrequency.toFixed(1)),
-        status: getStatus(calcHoistPower, hoistCurrent, hoistVoltage, hoistFrequency)
-      });
-    }
+    // Create records for each motor type that has data
+    const motors = [
+      { 
+        type: 'Hoist', 
+        data: hoist,
+        offset: 1 
+      },
+      { 
+        type: 'CT', 
+        data: ct,
+        offset: 2 
+      },
+      { 
+        type: 'LT', 
+        data: lt,
+        offset: 3 
+      }
+    ];
 
-    // CT (Cross Travel) motor record
-    if (calcCtPower > 0 || ctCurrent > 0) {
-      const uniqueTime = new Date(baseTime.getTime() + 2000); // Add 2 seconds for uniqueness
-      records.push({
-        id: `ct_${uniqueTime.getTime()}`,
-        timestamp: uniqueTime.toLocaleString('en-US', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
-        craneId: 'CRN-001',
-        motorType: 'CT',
-        power: parseFloat(calcCtPower.toFixed(1)),
-        current: parseFloat(ctCurrent.toFixed(1)),
-        voltage: parseFloat(ctVoltage.toFixed(0)),
-        energy: parseFloat((calcCtPower * operatingTime).toFixed(1)),
-        cost: parseFloat(((calcCtPower * operatingTime) * electricityRate).toFixed(2)),
-        frequency: parseFloat(ctFrequency.toFixed(1)),
-        status: getStatus(calcCtPower, ctCurrent, ctVoltage, ctFrequency)
-      });
-    }
-
-    // LT (Long Travel) motor record
-    if (calcLtPower > 0 || ltCurrent > 0) {
-      const uniqueTime = new Date(baseTime.getTime() + 3000); // Add 3 seconds for uniqueness
-      records.push({
-        id: `lt_${uniqueTime.getTime()}`,
-        timestamp: uniqueTime.toLocaleString('en-US', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
-        craneId: 'CRN-001',
-        motorType: 'LT',
-        power: parseFloat(calcLtPower.toFixed(1)),
-        current: parseFloat(ltCurrent.toFixed(1)),
-        voltage: parseFloat(ltVoltage.toFixed(0)),
-        energy: parseFloat((calcLtPower * operatingTime).toFixed(1)),
-        cost: parseFloat(((calcLtPower * operatingTime) * electricityRate).toFixed(2)),
-        frequency: parseFloat(ltFrequency.toFixed(1)),
-        status: getStatus(calcLtPower, ltCurrent, ltVoltage, ltFrequency)
-      });
-    }
+    motors.forEach((motor) => {
+      const { type, data, offset } = motor;
+      const { voltage, current, power, frequency } = data;
+      
+      // Only create record if we have some data for this motor
+      if (voltage > 0 || current > 0 || power > 0) {
+        const uniqueTime = new Date(baseTime.getTime() + offset);
+        const calcPower = power > 0 ? power : (voltage * current * 0.85) / 1000;
+        
+        records.push({
+          id: `${type.toLowerCase()}_${baseTime.getTime()}_${offset}`,
+          timestamp: baseTime.toLocaleString('en-US', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+          }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
+          craneId: 'CRN-001',
+          motorType: type,
+          power: parseFloat(calcPower.toFixed(1)),
+          current: parseFloat(current.toFixed(1)),
+          voltage: parseFloat(voltage.toFixed(0)),
+          energy: parseFloat((calcPower * operatingTime).toFixed(1)),
+          cost: parseFloat(((calcPower * operatingTime) * electricityRate).toFixed(2)),
+          frequency: parseFloat(frequency.toFixed(1)),
+          status: getStatus(data)
+        });
+      }
+    });
 
     return records;
   }, []);
 
-  // Enhanced polling function with proper state handling and duplicate prevention
+  // Enhanced polling function with proper state handling
   const fetchData = useCallback(async () => {
     if (isLoading) return;
     
@@ -337,14 +331,14 @@ const EnergyMonitoring = () => {
           );
 
           if (filteredServices.length > 0) {
-            // Process modbus data and extract energy readings
-            const { energyReadings, timestamp } = processModbusData(filteredServices);
+            // Process modbus data and extract motor readings
+            const { motorData, timestamp } = processModbusData(filteredServices);
 
             // Update metrics with current readings
-            updateMetrics(energyReadings);
+            updateMetrics(motorData);
 
-            // Create energy data records for table
-            const newEnergyRecords = createEnergyRecord(energyReadings, timestamp);
+            // Create energy data records for table - only for motors with data
+            const newEnergyRecords = createEnergyRecord(motorData, timestamp);
 
             if (newEnergyRecords.length > 0) {
               // Update energy data - prevent duplicates by checking IDs
@@ -353,51 +347,30 @@ const EnergyMonitoring = () => {
                 const uniqueNewRecords = newEnergyRecords.filter(record => !existingIds.has(record.id));
                 
                 if (uniqueNewRecords.length > 0) {
-                  // Keep last 50 records for smoother charts
-                  return [...uniqueNewRecords, ...prev].slice(0, 50);
+                  // Keep last 100 records to ensure we have enough data for the table
+                  return [...uniqueNewRecords, ...prev].slice(0, 100);
                 }
                 return prev;
               });
             }
-
-            setApiStatus(`${mode === 'polling' ? 'Polling' : 'Realtime'} - Modbus service active`);
-          } else {
-            setApiStatus('No modbus service data available');
           }
-
-          setLastUpdate(new Date());
-          setIsConnected(true);
-        } else {
-          setApiStatus('Error: API returned unsuccessful response');
-          setIsConnected(false);
         }
-      } else {
-        setApiStatus(`HTTP Error: ${response.status}`);
-        setIsConnected(false);
       }
     } catch (error) {
-      setApiStatus(`Connection Error: ${error.message}`);
-      setIsConnected(false);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, mode, processModbusData, updateMetrics, createEnergyRecord]);
+  }, [isLoading, processModbusData, updateMetrics, createEnergyRecord]);
 
   // WebSocket connection for realtime mode
   const connectWebSocket = useCallback(() => {
     try {
-      setApiStatus('Connecting to WebSocket...');
-      
       // Simulate WebSocket with rapid polling for service data
-      setIsConnected(true);
-      setApiStatus('Simulated WebSocket - Modbus Data');
-      
       fetchData(); // Initial fetch
       pollingRef.current = setInterval(fetchData, 2000); // Reduced to 2 seconds for realtime
-      
     } catch (error) {
-      setIsConnected(false);
-      setApiStatus('WebSocket setup error - Falling back to polling');
+      console.error('WebSocket connection failed:', error);
       setMode('polling');
     }
   }, [fetchData]);
@@ -415,13 +388,9 @@ const EnergyMonitoring = () => {
       pollingRef.current = null;
     }
 
-    setIsConnected(false);
-    setApiStatus(`Initializing ${mode} mode...`);
-
     if (mode === 'polling') {
       fetchData();
       pollingRef.current = setInterval(fetchData, pollingInterval);
-      setApiStatus(`Polling active - ${pollingInterval/1000}s interval`);
     } else if (mode === 'realtime') {
       connectWebSocket();
     }
@@ -442,14 +411,6 @@ const EnergyMonitoring = () => {
     setPollingInterval(interval);
   }, []);
 
-  // Manual refresh
-  const handleManualRefresh = useCallback(() => {
-    if (mode === 'polling') {
-      setApiStatus('Manual refresh...');
-      fetchData();
-    }
-  }, [mode, fetchData]);
-
   const handleFilterChange = useCallback((filterKey, value) => {
     setFilters(prev => ({
       ...prev,
@@ -459,7 +420,7 @@ const EnergyMonitoring = () => {
 
   const handleApplyFilters = useCallback(() => {
     console.log('Applying filters:', filters);
-    // Filter logic would be implemented here
+    setShowCharts(true); // Show charts when Apply Filters is clicked
   }, [filters]);
 
   const handleResetFilters = useCallback(() => {
@@ -469,22 +430,15 @@ const EnergyMonitoring = () => {
       date: 'today',
       metric: 'power'
     });
+    setShowCharts(false); // Hide charts when Reset is clicked
   }, []);
 
   return (
-    <>
-      <div className="page-title">
-        <h1>Energy Monitoring</h1>
-        <p>Real-time energy consumption from modbus service</p>
+    <div style={styles.pageContainer}>
+      <div style={styles.pageTitle}>
+        <h1 style={styles.pageTitleH1}>Energy Monitoring</h1>
+        <p style={styles.pageSubtitle}>Real-time energy consumption from modbus service</p>
       </div>
-
-      <ConnectionStatus 
-        mode={mode}
-        isConnected={isConnected}
-        lastUpdate={lastUpdate}
-        onManualRefresh={handleManualRefresh}
-        apiStatus={apiStatus}
-      />
 
       <DemoControls 
         mode={mode}
@@ -502,10 +456,16 @@ const EnergyMonitoring = () => {
         onResetFilters={handleResetFilters}
       />
 
-      <EnergyCharts energyData={energyData} />
+      {/* Show charts above table only when showCharts is true */}
+      {showCharts && (
+        <div style={styles.chartsSection}>
+          <EnergyCharts energyData={energyData} />
+        </div>
+      )}
 
+      {/* Always show the table */}
       <EnergyTable energyData={energyData} />
-    </>
+    </div>
   );
 };
 

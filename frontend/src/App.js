@@ -56,19 +56,11 @@ function App() {
             <Route path="/demo" element={<Demo />} />
             <Route path="/operations" element={<OperationsLog />} />
             <Route path="/load" element={<Load />} />
-            <Route path="/vibration" element={<VibrationMonitoring />} />
             <Route path="/energy" element={<EnergyMonitoring />} />
-            <Route path="/temperature" element={<Temperature />} />
-            <Route path="/brake" element={<BrakeMonitoring />} />
-            <Route path="/zone" element={<ZoneControl />} />
             <Route path="/rule-engine" element={<RuleEngine />} />
-            <Route path="/data-hub" element={<DataHub />} />
             <Route path="/errors" element={<ErrorLog />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/alerts" element={<Alerts />} />
-            <Route path="/settings/machine" element={<Machine />} />
-            <Route path="/settings/iot-gateway" element={<IotGateway />} />
-            <Route path="/settings/device" element={<Device />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
             <Route path="/south/config/:serviceName" element={<SouthConfig />} /> 

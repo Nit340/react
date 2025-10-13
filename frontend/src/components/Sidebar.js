@@ -15,26 +15,11 @@ const Sidebar = ({ sidebarExpanded, setSidebarExpanded }) => {
     { icon:'fas fa-penguin', label: 'Demo', path: '/demo' },
     { icon: 'fas fa-history', label: 'Operations Log', path: '/operations' },
     { icon: 'fas fa-weight-hanging', label: 'Load', path: '/load' },
-    { icon: 'fas fa-wave-square', label: 'Vibration Monitoring', path: '/vibration' },
     { icon: 'fas fa-bolt', label: 'Energy Monitoring', path: '/energy' },
-    { icon: 'fas fa-temperature-high', label: 'Temperature', path: '/temperature' },
-    { icon: 'fas fa-ban', label: 'Brake Monitoring', path: '/brake' },
-    { icon: 'fas fa-map-marked-alt', label: 'Zone Control', path: '/zone' },
     { icon: 'fas fa-cogs', label: 'Rule Engine', path: '/rule-engine' },
-    { icon: 'fas fa-database', label: 'Data Hub', path: '/data-hub' },
     { icon: 'fas fa-exclamation-triangle', label: 'Error Log', path: '/errors' },
     { icon: 'fas fa-file-export', label: 'Reports', path: '/reports' },
     { icon: 'fas fa-bell', label: 'Alerts', path: '/alerts' },
-    { 
-      icon: 'fas fa-cog', 
-      label: 'Settings', 
-      isDropdown: true,
-      dropdownItems: [
-        { icon: 'fas fa-weight-hanging', label: 'Machine', path: '/settings/machine' },
-        { icon: 'fas fa-network-wired', label: 'Iot-gateway', path: '/settings/iot-gateway' },
-        { icon: 'fas fa-microchip', label: 'Device', path: '/settings/device' }
-      ]
-    },
     { icon: 'fas fa-question-circle', label: 'Help', path: '/help' }
   ];
 

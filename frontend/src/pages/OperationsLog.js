@@ -28,6 +28,9 @@ const OperationsLog = () => {
   
   const ws = useRef(null);
   const pollingRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const lastProcessedDataHash = useRef(null);
+  const lastLoadValue = useRef(0);
 
   // Track previous values to detect operations
   const previousValues = useRef({
@@ -120,20 +123,53 @@ const OperationsLog = () => {
       loadValue = parseFloat(latestLoad.replace(/,/g, '')) || 0;
     }
 
-    setMetrics({
-      hoist,
-      ct,
-      lt,
-      switch: 0,
-      duration,
-      load: `${loadValue.toLocaleString()}T`
-    });
+    // Only update metrics if something actually changed
+    if (loadValue !== lastLoadValue.current || 
+        hoist.total !== metrics.hoist.total ||
+        ct.total !== metrics.ct.total ||
+        lt.total !== metrics.lt.total) {
+      
+      lastLoadValue.current = loadValue;
+      setMetrics({
+        hoist,
+        ct,
+        lt,
+        switch: 0,
+        duration,
+        load: `${loadValue.toLocaleString()}T`
+      });
+    }
+  }, [metrics]);
+
+  // Create hash for service data to detect actual changes
+  const createServiceDataHash = useCallback((serviceArray) => {
+    if (!serviceArray || serviceArray.length === 0) return null;
+    
+    const hashData = serviceArray.map(service => ({
+      name: service.name,
+      assets: service.assets.map(asset => ({
+        id: asset.id,
+        value: asset.value
+      })).sort((a, b) => a.id.localeCompare(b.id))
+    })).sort((a, b) => a.name.localeCompare(b.name));
+    
+    return JSON.stringify(hashData);
   }, []);
 
   // Process service data and extract operations
   const processServiceData = useCallback((serviceArray) => {
+    // Check if data content has actually changed
+    const currentHash = createServiceDataHash(serviceArray);
+    if (lastProcessedDataHash.current === currentHash) {
+      console.log('⏩ Skipping duplicate service data - no changes detected');
+      return { newOperations: [], currentLoad: lastLoadValue.current };
+    }
+    
+    console.log('✅ Service data changed, processing operations...');
+    lastProcessedDataHash.current = currentHash;
+
     const newOperations = [];
-    let currentLoad = 0;
+    let currentLoad = lastLoadValue.current; // Default to last known load
 
     // Find LoadCell service and get current load
     const loadCellService = serviceArray.find(service => service.name === 'LoadCell');
@@ -141,12 +177,15 @@ const OperationsLog = () => {
       const loadAsset = loadCellService.assets.find(asset => asset.id === 'Load');
       if (loadAsset) {
         currentLoad = parseFloat(loadAsset.value) || 0;
+        console.log('⚖️ Current load:', currentLoad);
       }
     }
 
     // Find onboard_io service and detect operations
     const onboardIOService = serviceArray.find(service => service.name === 'onboard_io');
     if (onboardIOService) {
+      let operationsDetected = 0;
+      
       onboardIOService.assets.forEach(asset => {
         const { id, value, timestamp } = asset;
         const prevValue = previousValues.current[id] || 0;
@@ -203,25 +242,39 @@ const OperationsLog = () => {
             };
 
             newOperations.push(operation);
+            operationsDetected++;
+            console.log(`🎯 Detected ${operationType} operation`);
           }
 
           // Update previous value
           previousValues.current[id] = value;
         }
       });
+      
+      if (operationsDetected > 0) {
+        console.log(`🔍 Processed ${operationsDetected} new operations`);
+      }
     }
 
     return { newOperations, currentLoad };
-  }, []);
+  }, [createServiceDataHash]);
 
   // Enhanced polling function with proper state handling
   const fetchData = useCallback(async () => {
     if (isLoading) return;
     
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
     setIsLoading(true);
     
     try {
-      const response = await fetch('/api/iot-data');
+      const response = await fetch('/api/iot-data', {
+        signal: abortControllerRef.current.signal
+      });
       
       if (response.ok) {
         const result = await response.json();
@@ -244,40 +297,59 @@ const OperationsLog = () => {
           // Process services and extract operations
           const { newOperations, currentLoad } = processServiceData(filteredServices);
 
-          // Use functional update to get the latest state and update both operations and metrics atomically
-          setOperationsData(prevOperations => {
-            const updatedOperations = newOperations.length > 0 
-              ? [...newOperations, ...prevOperations].slice(0, 100)
-              : prevOperations;
-            
-            // Update metrics with the current data and load
-            updateMetrics(updatedOperations, currentLoad);
-            
-            return updatedOperations;
-          });
+          // Only update if we have new operations
+          if (newOperations.length > 0) {
+            setOperationsData(prevOperations => {
+              const updatedOperations = [...newOperations, ...prevOperations].slice(0, 100);
+              
+              // Update metrics with the current data and load
+              updateMetrics(updatedOperations, currentLoad);
+              
+              return updatedOperations;
+            });
+          } else {
+            // Just update metrics with current load (no new operations)
+            updateMetrics(operationsData, currentLoad);
+          }
         }
       }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('🔄 Request cancelled');
+        return;
+      }
       console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
-  }, [isLoading, processServiceData, updateMetrics]);
+  }, [isLoading, processServiceData, updateMetrics, operationsData]);
 
   // WebSocket connection for realtime mode
   const connectWebSocket = useCallback(() => {
     try {
+      // Clean up any existing polling first
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      
       // Simulate WebSocket with rapid polling for service data
       fetchData(); // Initial fetch
-      pollingRef.current = setInterval(fetchData, 500);
+      pollingRef.current = setInterval(fetchData, 1000); // Reasonable interval
     } catch (error) {
       setMode('polling');
     }
   }, [fetchData]);
 
-  // Method switching effect
-  useEffect(() => {
-    // Cleanup previous connections
+  // Cleanup function
+  const cleanupConnections = useCallback(() => {
+    // Cancel any pending fetch request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     if (ws.current) {
       ws.current.close();
       ws.current = null;
@@ -287,6 +359,13 @@ const OperationsLog = () => {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
+    
+    setIsLoading(false);
+  }, []);
+
+  // Method switching effect
+  useEffect(() => {
+    cleanupConnections();
 
     if (mode === 'polling') {
       fetchData();
@@ -295,11 +374,8 @@ const OperationsLog = () => {
       connectWebSocket();
     }
 
-    return () => {
-      if (ws.current) ws.current.close();
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [mode, pollingInterval, fetchData, connectWebSocket]);
+    return cleanupConnections;
+  }, [mode, pollingInterval, fetchData, connectWebSocket, cleanupConnections]);
 
   // Handle mode change
   const handleModeChange = useCallback((newMode) => {

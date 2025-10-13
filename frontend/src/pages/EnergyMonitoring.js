@@ -434,7 +434,7 @@ const EnergyMonitoring = () => {
   }, []);
 
   return (
-    <div style={styles.pageContainer}>
+    <div>
       <div style={styles.pageTitle}>
         <h1 style={styles.pageTitleH1}>Energy Monitoring</h1>
         <p style={styles.pageSubtitle}>Real-time energy consumption from modbus service</p>

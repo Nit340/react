@@ -1,4 +1,4 @@
-// pages/Demo.js
+// pages/Demo.js - DEBUG VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import DemoMetrics from '../components/Demo/DemoMetrics';
 import DemoControls from '../components/Demo/DemoControls';
@@ -14,12 +14,27 @@ const Demo = () => {
   const [pollingInterval, setPollingInterval] = useState(2000);
   const [apiStatus, setApiStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const ws = useRef(null);
+  
   const pollingRef = useRef(null);
+  const eventSourceRef = useRef(null);
+  const debugLogRef = useRef([]);
+
+  // Debug logging
+  const addDebugLog = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    debugLogRef.current.push(logEntry);
+    console.log(logEntry);
+    
+    // Keep only last 20 logs
+    if (debugLogRef.current.length > 20) {
+      debugLogRef.current.shift();
+    }
+  };
 
   // Process service-based data structure
-  const processServiceData = (serviceArray) => {
-    console.log('🔄 Processing service data:', serviceArray);
+  const processServiceData = (serviceArray, source) => {
+    addDebugLog(`🔄 Processing ${serviceArray.length} services from ${source}`);
     
     const processedServices = serviceArray.map(service => ({
       name: service.name,
@@ -30,26 +45,20 @@ const Demo = () => {
       }))
     }));
 
-    setServices(processedServices);
-    
     // Create flat structure for legacy components
     const flatData = {};
     
-    // Map service assets to flat data structure
-    serviceArray.forEach(service => {
+    processedServices.forEach(service => {
       service.assets.forEach(asset => {
         flatData[asset.id] = asset.value;
       });
     });
 
-    // Add timestamp and source
     flatData.timestamp = serviceArray[0]?.assets[0]?.timestamp || new Date().toISOString();
-    flatData.source = 'service_data';
+    flatData.source = source;
     
-    console.log('✅ Processed services:', processedServices);
-    console.log('✅ Flat data:', flatData);
+    addDebugLog(`✅ Processed to ${processedServices.length} services, ${Object.keys(flatData).length} assets`);
     
-    setData(flatData);
     return { services: processedServices, flatData };
   };
 
@@ -60,127 +69,191 @@ const Demo = () => {
     setIsLoading(true);
     
     try {
-      console.log('🔄 Polling: Fetching data from /api/iot-data...');
+      addDebugLog(`📡 FETCHING from /api/iot-data (mode: ${mode})`);
       const response = await fetch('/api/iot-data');
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Full API Response:', result);
+        addDebugLog(`📦 GOT RESPONSE: ${result.success ? 'SUCCESS' : 'FAILED'}`);
         
         if (result.success && result.data) {
-          // Handle the nested service data structure
           if (result.data.services && Array.isArray(result.data.services)) {
-            // New service format with nested services array
-            const processed = processServiceData(result.data.services);
-            setApiStatus(`Service Data - ${result.data.total_services} services, ${result.data.total_assets} assets`);
-          } else if (Array.isArray(result.data)) {
-            // Direct array of services
-            const processed = processServiceData(result.data);
-            setApiStatus(`Service Data - ${processed.services.length} services`);
-          } else {
-            // Old flat format
-            console.log('⚠️ Using old flat data format');
-            setData(result.data);
-            setApiStatus(`Legacy Data - Source: ${result.source}`);
+            const processed = processServiceData(result.data.services, `polling-${mode}`);
+            
+            // Check if data actually changed
+            const currentValues = services.flatMap(s => s.assets.map(a => a.value)).join(',');
+            const newValues = processed.services.flatMap(s => s.assets.map(a => a.value)).join(',');
+            
+            addDebugLog(`🔍 DATA COMPARISON - Current: [${currentValues}] vs New: [${newValues}]`);
+            
+            if (currentValues !== newValues) {
+              setServices(processed.services);
+              setData(processed.flatData);
+              setLastUpdate(new Date());
+              setIsConnected(true);
+              setApiStatus(`Polling - ${result.data.total_services} services`);
+              addDebugLog(`🔄 UPDATED DISPLAY with new data`);
+            } else {
+              addDebugLog(`⏭️ SKIPPED UPDATE - data unchanged`);
+            }
           }
-          setLastUpdate(new Date());
-          setIsConnected(true);
-        } else {
-          console.error('API returned unsuccessful response:', result);
-          setApiStatus('Error: API returned unsuccessful response');
-          setIsConnected(false);
         }
-      } else {
-        console.error('HTTP error:', response.status);
-        setApiStatus(`HTTP Error: ${response.status}`);
-        setIsConnected(false);
       }
     } catch (error) {
-      console.error('Polling Error:', error);
-      setApiStatus(`Connection Error: ${error.message}`);
+      addDebugLog(`❌ FETCH ERROR: ${error.message}`);
       setIsConnected(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // WebSocket connection
+  // REAL Server-Sent Events (should NOT show polling logs)
+  const connectEventSource = () => {
+    try {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        addDebugLog('🔌 Closed previous SSE connection');
+      }
+
+      setApiStatus('🔄 Connecting to REAL-TIME stream...');
+      addDebugLog('🚀 STARTING REAL SSE CONNECTION to /api/stream-iot-data');
+      
+      eventSourceRef.current = new EventSource('/api/stream-iot-data');
+      
+      eventSourceRef.current.onopen = () => {
+        addDebugLog('✅ SSE CONNECTION OPENED - Real-time mode active');
+        setApiStatus('✅ Real-time stream connected');
+        setIsConnected(true);
+      };
+      
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const result = JSON.parse(event.data);
+          addDebugLog(`📨 SSE MESSAGE RECEIVED: ${result.type || 'data'}`);
+          
+          if (result.services) {
+            const processed = processServiceData(result.services, 'sse-realtime');
+            setServices(processed.services);
+            setData(processed.flatData);
+            setLastUpdate(new Date());
+            setApiStatus(`📊 Real-time: ${processed.services.length} services`);
+            addDebugLog(`🔄 SSE UPDATED DISPLAY`);
+          }
+        } catch (e) {
+          addDebugLog(`❌ SSE PARSE ERROR: ${e.message}`);
+        }
+      };
+      
+      eventSourceRef.current.onerror = (error) => {
+        addDebugLog(`❌ SSE ERROR: ${error}`);
+        setApiStatus('❌ Real-time stream error');
+        setIsConnected(false);
+      };
+      
+    } catch (error) {
+      addDebugLog(`❌ SSE SETUP FAILED: ${error.message}`);
+      setApiStatus('❌ SSE setup failed');
+    }
+  };
+
+  // WebSocket mode (fast polling - should show as websocket in logs)
   const connectWebSocket = () => {
     try {
-      setApiStatus('Connecting to WebSocket...');
-      
-      // Simulate WebSocket with rapid polling for service data
-      console.log('🔄 Using simulated WebSocket mode');
-      
+      addDebugLog('🚀 STARTING WEBSOCKET MODE (fast polling)');
+      setApiStatus('📡 WebSocket mode (fast polling)');
       setIsConnected(true);
-      setApiStatus('Simulated WebSocket - Service Data');
       
-      fetchData(); // Initial fetch
+      fetchData();
       pollingRef.current = setInterval(fetchData, 500);
       
     } catch (error) {
-      console.error('WebSocket setup error:', error);
-      setIsConnected(false);
-      setApiStatus('WebSocket setup error - Falling back to polling');
+      addDebugLog(`❌ WEBSOCKET SETUP FAILED: ${error.message}`);
       setMode('polling');
     }
   };
 
   // Method switching effect
   useEffect(() => {
-    console.log(`🔄 Switching to ${mode} mode`);
+    addDebugLog(`🔄 SWITCHING MODE to: ${mode}`);
     
     // Cleanup previous connections
-    if (ws.current) {
-      ws.current.close();
-      ws.current = null;
-    }
-    
     if (pollingRef.current) {
+      addDebugLog('🛑 CLEARING polling interval');
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
+    
+    if (eventSourceRef.current) {
+      addDebugLog('🛑 CLOSING SSE connection');
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
 
     setIsConnected(false);
-    setApiStatus(`Initializing ${mode} mode...`);
 
-    if (mode === 'polling') {
-      fetchData();
-      pollingRef.current = setInterval(fetchData, pollingInterval);
-      setApiStatus(`Polling active - ${pollingInterval/1000}s interval`);
-    } else if (mode === 'realtime') {
-      connectWebSocket();
+    switch (mode) {
+      case 'polling':
+        addDebugLog('🎯 STARTING PURE POLLING MODE');
+        setApiStatus(`🔄 Polling mode - ${pollingInterval}ms`);
+        fetchData();
+        pollingRef.current = setInterval(fetchData, pollingInterval);
+        break;
+        
+      case 'realtime':
+        addDebugLog('🎯 STARTING PURE SSE/REALTIME MODE (NO POLLING)');
+        connectEventSource();
+        break;
+        
+      case 'websocket':
+        addDebugLog('🎯 STARTING WEBSOCKET MODE (fast polling)');
+        connectWebSocket();
+        break;
     }
 
     return () => {
-      if (ws.current) ws.current.close();
+      addDebugLog('🧹 CLEANUP - stopping all connections');
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (eventSourceRef.current) eventSourceRef.current.close();
     };
   }, [mode, pollingInterval]);
 
-  // Handle mode change
   const handleModeChange = (newMode) => {
+    addDebugLog(`👆 USER CHANGED MODE to: ${newMode}`);
     setMode(newMode);
   };
 
-  // Handle interval change
   const handleIntervalChange = (interval) => {
     setPollingInterval(interval);
   };
 
-  // Manual refresh
   const handleManualRefresh = () => {
-    if (mode === 'polling') {
-      setApiStatus('Manual refresh...');
-      fetchData();
-    }
+    addDebugLog('👆 MANUAL REFRESH triggered');
+    fetchData();
   };
 
   return (
     <>
       <div className="page-title">
-        <h1>IoT Data Demo</h1>
-        <p>Real-time monitoring of service-based IoT data</p>
+        <h1>IoT Data Demo - DEBUG MODE</h1>
+        <p>Checking realtime vs polling behavior</p>
+        
+        {/* Debug panel */}
+        <div style={{
+          background: '#f5f5f5', 
+          padding: '10px', 
+          borderRadius: '5px', 
+          marginTop: '10px',
+          fontSize: '12px',
+          maxHeight: '150px',
+          overflowY: 'auto'
+        }}>
+          <strong>Debug Logs:</strong>
+          {debugLogRef.current.slice(-8).map((log, index) => (
+            <div key={index} style={{fontFamily: 'monospace', margin: '2px 0'}}>
+              {log}
+            </div>
+          ))}
+        </div>
       </div>
 
       <ConnectionStatus 
@@ -201,7 +274,7 @@ const Demo = () => {
 
       {/* Service-based Data Display */}
       <div className="services-container">
-        <h3>Service Data ({services.length} services)</h3>
+        <h3>Service Data ({services.length} services) - Mode: {mode}</h3>
         <div className="services-grid">
           {services.map(service => (
             <div key={service.name} className="service-card">
@@ -229,7 +302,6 @@ const Demo = () => {
       </div>
 
       <DemoMetrics data={data} services={services} isLoading={isLoading} />
-
       <DataGrid data={data} services={services} isLoading={isLoading} />
 
       <style jsx>{`

@@ -13,6 +13,10 @@ urlpatterns = [
     path('iot-data/receive', views.receive_iot_data, name='receive-iot-data'),
     path('iot-data/history', views.get_iot_data_history, name='iot-data-history'),
     
+    # ==================== REAL-TIME STREAMING ENDPOINTS ====================
+    # Server-Sent Events (SSE) for real-time streaming
+    path('stream/iot-data', views.stream_iot_data, name='stream-iot-data'),
+    
     # ==================== UTILITY ENDPOINTS ====================
     path('health', views.health_check, name='health-check'),
     path('debug', views.debug_info, name='debug-info'),

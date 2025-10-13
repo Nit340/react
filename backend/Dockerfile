@@ -1,42 +1,38 @@
-# ===========================
-# Stage 1: Builder
-# ===========================
-FROM python:3.11-alpine AS builder
-
-WORKDIR /app
-
-RUN apk add --no-cache --virtual .build-deps \
-        build-base \
-        libffi-dev \
-        postgresql-dev \
-        musl-dev \
-        gcc \
-        python3-dev \
-        openssl-dev \
-        curl
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# ===========================
-# Stage 2: Final image
-# ===========================
+# Use smaller base image
 FROM python:3.11-alpine
 
 WORKDIR /app
 
-COPY --from=builder /install /usr/local
+# Install essential build dependencies including libffi for cffi
+RUN apk add --no-cache --virtual .build-deps \
+        build-base \
+        python3-dev \
+        libffi-dev \
+        gcc \
+        musl-dev \
+    && apk add --no-cache bash curl
 
-# ✅ Copy entire project (includes api/)
+# Copy requirements and install Python packages
+COPY requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy project files
 COPY . .
 
-RUN rm -rf /var/cache/apk/* /root/.cache \
-    && find /usr/local -type d -name "__pycache__" -exec rm -rf {} + \
-    && find /usr/local/lib/python3.11/site-packages -name "tests" -exec rm -rf {} + \
-    && find /usr/local/lib/python3.11/site-packages -name "*.dist-info" -exec rm -rf {} +
+# Create directories and set permissions
+RUN mkdir -p /app/db /app/static && \
+    chmod -R 755 /app/db /app/static && \
+    chmod +x /app/entrypoint.sh
 
-RUN adduser -D appuser && chown -R appuser /app
+# Clean up build dependencies to save space
+RUN apk del .build-deps && \
+    rm -rf /var/cache/apk/* /root/.cache
+
+# Add a non-root user
+RUN adduser -D appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+CMD ["/app/entrypoint.sh"]

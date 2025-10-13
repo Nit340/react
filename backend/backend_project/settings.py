@@ -73,19 +73,31 @@ TEMPLATES = [
         },
     },
 ]
+# In your settings.py
+# Add these if not present
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
 
+# For better performance with Gunicorn
 WSGI_APPLICATION = 'backend_project.wsgi.application'
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+import os
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db/db.sqlite3'),
+        'OPTIONS': {
+            'timeout': 20,
+        }
     }
 }
+
+# Reduce connection lifetime
+CONN_MAX_AGE = 60  # 1 minute instead of default
 
 
 # Password validation

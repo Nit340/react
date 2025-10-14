@@ -9,23 +9,13 @@ import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import OperationsLog from './pages/OperationsLog';
 import Load from './pages/Load';
-import VibrationMonitoring from './pages/VibrationMonitoring';
 import EnergyMonitoring from './pages/EnergyMonitoring';
-import Temperature from './pages/Temperature';
-import BrakeMonitoring from './pages/BrakeMonitoring';
-import ZoneControl from './pages/ZoneControl';
 import RuleEngine from './pages/RuleEngine';
-import DataHub from './pages/DataHub';
-import ErrorLog from './pages/ErrorLog';
-import Reports from './pages/Reports';
-import Alerts from './pages/Alerts';
-import Machine from './pages/settings/Machine';
-import IotGateway from './pages/settings/IotGateway';
-import Device from './pages/settings/Device';
 import Help from './pages/Help';
 import South from './pages/South/South';
 import SouthConfig from './pages/South/SouthConfig';
 import Demo from './pages/Demo';
+import CraneDetails from './pages/CraneDetails';  
 // Styles
 import './App.css';
 import './CSS/Dashboard.css';
@@ -38,6 +28,7 @@ import './CSS/EnergyMonitoring.css';
 import './CSS/Demo.css';
 // In App.js, add this import with the others
 import './CSS/Load.css';
+
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
@@ -56,22 +47,13 @@ function App() {
             <Route path="/demo" element={<Demo />} />
             <Route path="/operations" element={<OperationsLog />} />
             <Route path="/load" element={<Load />} />
-            <Route path="/vibration" element={<VibrationMonitoring />} />
             <Route path="/energy" element={<EnergyMonitoring />} />
-            <Route path="/temperature" element={<Temperature />} />
-            <Route path="/brake" element={<BrakeMonitoring />} />
-            <Route path="/zone" element={<ZoneControl />} />
             <Route path="/rule-engine" element={<RuleEngine />} />
-            <Route path="/data-hub" element={<DataHub />} />
-            <Route path="/errors" element={<ErrorLog />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/settings/machine" element={<Machine />} />
-            <Route path="/settings/iot-gateway" element={<IotGateway />} />
-            <Route path="/settings/device" element={<Device />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<NotFound />} />
             <Route path="/south/config/:serviceName" element={<SouthConfig />} /> 
+            <Route path="/crane-details" element={<CraneDetails />} />
+
           </Routes>
         </div>
       </div>

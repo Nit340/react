@@ -28,7 +28,6 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]  # for testing; can restrict later
 
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -40,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'api',
+    'django_extensions',  # Useful for development - shell_plus, etc.
 ]
 
 MIDDLEWARE = [
@@ -53,9 +53,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# settings.py
-
+# CORS settings
 CORS_ALLOW_ALL_ORIGINS = True 
+# For production, you might want to restrict this:
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     "http://localhost:8000",
+# ]
 
 ROOT_URLCONF = 'backend_project.urls'
 
@@ -112,7 +117,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'UTC'  # You might want to change this to your local timezone
 
 USE_I18N = True
 
@@ -123,8 +128,133 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # For production collectstatic
+
+# Media files (if needed for future)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==================== IOT SPECIFIC SETTINGS ====================
+
+# Data retention settings
+IOT_DATA_RETENTION_DAYS = 30
+IOT_MAX_HISTORY_RECORDS = 10000
+
+# Service configuration defaults
+IOT_DEFAULT_POLLING_INTERVAL = 60  # seconds
+IOT_DEFAULT_MAX_ASSETS = 50
+
+# External server configuration (for crane config)
+EXTERNAL_SERVER_URL = "http://172.28.176.174:5000"
+EXTERNAL_API_TIMEOUT = 10  # seconds
+
+# Cache configuration (optional, for performance)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Set cache timeout for IoT data (in seconds)
+IOT_CACHE_TIMEOUT = 300  # 5 minutes
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+        'iot_format': {
+            'format': '{asctime} | {levelname:8} | {name} | {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'iot_data.log',
+            'formatter': 'iot_format',
+        },
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'iot_format',
+        },
+    },
+    'loggers': {
+        'api': {  # Your api app logger
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+}
+
+# Enhanced security settings (compatible with development)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# Session settings
+SESSION_COOKIE_HTTPONLY = True
+
+# CSRF settings - you might want to adjust these for your frontend
+CSRF_COOKIE_HTTPONLY = True
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# For production, you would also enable these:
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+
+# Admin site configuration
+ADMIN_SITE_HEADER = "IoT Crane Data Management System"
+ADMIN_SITE_TITLE = "IoT Crane Admin"
+ADMIN_INDEX_TITLE = "Crane Data Administration"
+
+# Django Extensions configuration (for development)
+SHELL_PLUS = "ipython"
+SHELL_PLUS_PRINT_SQL = True
+
+# File upload settings (if you'll handle file uploads in future)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 26214400  # 25MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26214400  # 25MB
+
+# Email settings (for future alert functionality)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
+# For production, configure real email backend:
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'your-smtp-host'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'your-email@example.com'
+# EMAIL_HOST_PASSWORD = 'your-password'

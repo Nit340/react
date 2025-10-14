@@ -1,7 +1,7 @@
 import React from 'react';
 import OEEGauge from './OEEGauge';
 
-const DashboardStats = ({ metrics, oee, onRefresh }) => {
+const DashboardStats = ({ metrics, oee, onRefresh, isLoading }) => {
   return (
     <div className="dashboard-stats-container">
       {/* Quick Stats Section */}
@@ -22,9 +22,8 @@ const DashboardStats = ({ metrics, oee, onRefresh }) => {
             </div>
             <div className="stat-value">{metrics.totalPower}</div>
             <div className="stat-unit">kW</div>
-            <div className="stat-change positive">
-              <i className="fas fa-arrow-up"></i>
-              <span>1.2% from yesterday</span>
+            <div className="stat-change">
+              <span>Real-time data</span>
             </div>
           </div>
           
@@ -36,9 +35,8 @@ const DashboardStats = ({ metrics, oee, onRefresh }) => {
             </div>
             <div className="stat-value">{metrics.totalCurrent}</div>
             <div className="stat-unit">A</div>
-            <div className="stat-change negative">
-              <i className="fas fa-arrow-down"></i>
-              <span>0.8% from yesterday</span>
+            <div className="stat-change">
+              <span>Real-time data</span>
             </div>
           </div>
           
@@ -49,10 +47,9 @@ const DashboardStats = ({ metrics, oee, onRefresh }) => {
               <span>Active Cranes</span>
             </div>
             <div className="stat-value">{metrics.activeCranes}</div>
-            <div className="stat-unit">/6 total</div>
-            <div className="stat-change positive">
-              <i className="fas fa-arrow-up"></i>
-              <span>50% utilization</span>
+            <div className="stat-unit">/1 total</div>
+            <div className="stat-change">
+              <span>Based on 5-min activity</span>
             </div>
           </div>
           
@@ -63,10 +60,9 @@ const DashboardStats = ({ metrics, oee, onRefresh }) => {
               <span>Idle Cranes</span>
             </div>
             <div className="stat-value">{metrics.idleCranes}</div>
-            <div className="stat-unit">/6 total</div>
-            <div className="stat-change negative">
-              <i className="fas fa-arrow-down"></i>
-              <span>33% utilization</span>
+            <div className="stat-unit">/1 total</div>
+            <div className="stat-change">
+              <span>Based on 5-min activity</span>
             </div>
           </div>
         </div>

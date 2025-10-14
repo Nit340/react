@@ -1,4 +1,27 @@
 /* Dashboard Stats Container */
+.no-cranes-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c757d;
+}
+
+.no-cranes-message i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: #dee2e6;
+}
+
+.no-cranes-message h3 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.no-cranes-message p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.8;
+}
 .dashboard-stats-container {
   display: grid;
   grid-template-columns: 1fr 2fr;

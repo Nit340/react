@@ -1,9 +1,10 @@
 __pycache__/
 *.pyc
 *.pyo
-*.db
-.env
-.vscode/
-.git/
-.idea/
 *.log
+db.sqlite3
+.env
+.git
+.gitignore
+pytest_cache/
+media/

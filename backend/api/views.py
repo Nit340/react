@@ -1,4 +1,6 @@
 # views.py
+
+from datetime import datetime, timedelta  # Add timedelta here
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -7,10 +9,12 @@ import requests
 from datetime import datetime
 import asyncio
 from collections import deque
+import threading
+from django.db import transaction
+from .models import Service, Asset, DataHistory
 
 # ==================== CONFIGURATION ====================
-# Only for crane config endpoints
-
+EXTERNAL_SERVER_GET_BASE_URL = "http://172.28.176.174:5000"
 
 # ==================== IOT DATA STORAGE ====================
 iot_data_store = {
@@ -20,6 +24,61 @@ iot_data_store = {
 }
 
 active_connections = set()
+
+# ==================== DATABASE STORAGE FUNCTIONS ====================
+
+def save_to_database_async(services_data):
+    """Save IoT data to database in a separate thread"""
+    def save_data():
+        try:
+            with transaction.atomic():
+                total_assets_processed = 0
+                
+                for service_data in services_data:
+                    if 'name' in service_data and 'assets' in service_data:
+                        # Get or create service
+                        service, created = Service.objects.get_or_create(
+                            name=service_data['name']
+                        )
+                        
+                        for asset_data in service_data['assets']:
+                            if 'id' in asset_data and 'value' in asset_data:
+                                # Parse timestamp
+                                timestamp_str = asset_data.get('timestamp', datetime.now().isoformat() + 'Z')
+                                try:
+                                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                except:
+                                    timestamp = datetime.now()
+                                
+                                # Create or update asset
+                                asset, asset_created = Asset.objects.update_or_create(
+                                    service=service,
+                                    asset_id=asset_data['id'],
+                                    defaults={
+                                        'value': asset_data['value'],
+                                        'timestamp': timestamp,
+                                    }
+                                )
+                                
+                                # Create data history entry
+                                DataHistory.objects.create(
+                                    service=service,
+                                    asset=asset,
+                                    value=asset_data['value'],
+                                    timestamp=timestamp
+                                )
+                                
+                                total_assets_processed += 1
+                
+                print(f"💾 Database: Saved {len(services_data)} services with {total_assets_processed} assets")
+                
+        except Exception as e:
+            print(f"❌ Database save error: {e}")
+    
+    # Start the database save in a separate thread
+    thread = threading.Thread(target=save_data)
+    thread.daemon = True
+    thread.start()
 
 # ==================== SERVICE-BASED DATA PROCESSING ====================
 
@@ -60,7 +119,7 @@ def get_iot_data(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def receive_iot_data(request):
-    """Receive IoT data from devices via POST in service-based format - LOCAL PROCESSING ONLY"""
+    """Receive IoT data from devices via POST - FORWARD IMMEDIATELY + STORE IN DB ASYNC"""
     print("=" * 50)
     print("📱 Django: IoT Data POST received")
     print(f"Request path: {request.path}")
@@ -78,6 +137,7 @@ def receive_iot_data(request):
             first_service = data[0]
             print(f"First service: {first_service.get('name', 'Unknown')} with {len(first_service.get('assets', []))} assets")
         
+        # Process data for local storage
         processed_data = process_service_based_data(data)
         
         # Store the data locally
@@ -85,7 +145,14 @@ def receive_iot_data(request):
         iot_data_store['history'].append(processed_data)
         iot_data_store['services'] = processed_data.get('services', [])
         
-        print(f"✅ Stored {processed_data['total_services']} services with {processed_data['total_assets']} assets")
+        print(f"✅ Stored {processed_data['total_services']} services with {processed_data['total_assets']} assets in local storage")
+        
+        # Save to database in background thread (non-blocking)
+        if isinstance(data, list):
+            save_to_database_async(data)
+        else:
+            services_data = data.get('services', [data]) if isinstance(data, dict) else [data]
+            save_to_database_async(services_data)
         
         # Broadcast to WebSocket clients
         asyncio.run(broadcast_to_websockets(processed_data))
@@ -95,6 +162,7 @@ def receive_iot_data(request):
             "message": f"Processed {processed_data['total_services']} services",
             "received_services": processed_data['total_services'],
             "received_assets": processed_data['total_assets'],
+            "database_save": "started",  # Indicate that DB save is in progress
             "timestamp": datetime.now().isoformat() + 'Z'
         })
         
@@ -167,6 +235,103 @@ def get_iot_data_history(request):
         "timestamp": datetime.now().isoformat() + 'Z'
     })
 
+# ==================== DATABASE QUERY ENDPOINTS ====================
+
+@require_http_methods(["GET"])
+def get_database_services(request):
+    """Get services from database"""
+    try:
+        services = Service.objects.prefetch_related('assets').all()
+        service_data = []
+        
+        for service in services:
+            assets = []
+            for asset in service.assets.all()[:20]:  # Limit assets for performance
+                assets.append({
+                    'id': asset.asset_id,
+                    'value': asset.value,
+                    'timestamp': asset.timestamp.isoformat() + 'Z',
+                    'value_type': asset.value_type,
+                    'unit': asset.unit
+                })
+            
+            service_data.append({
+                'name': service.name,
+                'assets': assets,
+                'total_assets': service.assets.count()
+            })
+        
+        return JsonResponse({
+            "success": True,
+            "data": service_data,
+            "total_services": len(service_data),
+            "source": "database",
+            "timestamp": datetime.now().isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"❌ Database query error: {e}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+@require_http_methods(["GET"])
+def get_database_assets(request, service_name=None):
+    """Get assets from database, optionally filtered by service - ENHANCED VERSION"""
+    try:
+        # Get time range filter from query parameters
+        hours = int(request.GET.get('hours', 6))  # Default to last 6 hours for dashboard
+        time_filter = datetime.now() - timedelta(hours=hours)
+        
+        assets_query = Asset.objects.select_related('service').filter(
+            timestamp__gte=time_filter
+        )
+        
+        if service_name:
+            assets_query = assets_query.filter(service__name=service_name)
+        
+        # Get latest asset for each asset_id to avoid duplicates
+        latest_assets = []
+        seen_assets = set()
+        
+        # Order by timestamp descending and take unique asset_ids
+        for asset in assets_query.order_by('-timestamp'):
+            if asset.asset_id not in seen_assets:
+                seen_assets.add(asset.asset_id)
+                latest_assets.append(asset)
+        
+        asset_data = []
+        for asset in latest_assets:
+            asset_data.append({
+                'service': asset.service.name,
+                'asset_id': asset.asset_id,
+                'value': asset.value,
+                'value_type': asset.value_type,
+                'unit': asset.unit,
+                'timestamp': asset.timestamp.isoformat() + 'Z',
+                'created_at': asset.created_at.isoformat() + 'Z'
+            })
+        
+        print(f"📊 Database assets query: {len(asset_data)} unique assets from last {hours} hours")
+        
+        return JsonResponse({
+            "success": True,
+            "data": asset_data,
+            "count": len(asset_data),
+            "time_range_hours": hours,
+            "service_filter": service_name,
+            "source": "database",
+            "timestamp": datetime.now().isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"❌ Database assets query error: {e}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
 # ==================== WEB SOCKET SUPPORT ====================
 
 async def broadcast_to_websockets(data):
@@ -203,14 +368,7 @@ async def websocket_iot(request):
     })
 
 # ==================== CONFIGURATION ENDPOINTS ====================
-# These use the external server for crane configuration
 
-# views.py - Update the configuration section
-# ==================== CONFIGURATION ====================
-# Only for service config endpoints - Flask server
-EXTERNAL_SERVER_GET_BASE_URL = "http://172.28.176.174:5000"
-
-# Update the get_crane_config_proxy function:
 @require_http_methods(["GET"])
 def get_crane_config_proxy(request):
     """GET endpoint that fetches from Flask server - ONLY FOR CONFIG"""
@@ -271,7 +429,6 @@ def get_crane_config_proxy(request):
             "timestamp": datetime.now().isoformat() + 'Z'
         }, status=500)
 
-# Update the update_crane_config_proxy function:
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_crane_config_proxy(request):
@@ -344,14 +501,28 @@ def health_check(request):
     # Check data storage health
     data_health = "healthy" if iot_data_store['services'] or iot_data_store['latest'] else "no_data"
     
+    # Check database health
+    try:
+        db_service_count = Service.objects.count()
+        db_asset_count = Asset.objects.count()
+        db_health = "healthy"
+    except Exception as e:
+        db_service_count = 0
+        db_asset_count = 0
+        db_health = f"error: {e}"
+    
     print(f"🏥 Data storage status: {data_health}")
+    print(f"🏥 Database status: {db_health}")
     
     return JsonResponse({
         "status": "healthy",
         "message": "Django server is running",
         "data_storage": data_health,
+        "database": db_health,
         "stored_services": len(iot_data_store['services']),
         "stored_assets": sum(len(service.get('assets', [])) for service in iot_data_store['services']),
+        "db_services": db_service_count,
+        "db_assets": db_asset_count,
         "timestamp": datetime.now().isoformat() + 'Z'
     })
 
@@ -371,6 +542,20 @@ def debug_info(request):
             'assets': [asset['id'] for asset in service.get('assets', [])][:3]  # First 3 assets
         })
     
+    # Get database stats
+    try:
+        db_services = Service.objects.count()
+        db_assets = Asset.objects.count()
+        recent_assets = Asset.objects.order_by('-timestamp')[:5]
+        recent_assets_info = [
+            f"{asset.service.name}.{asset.asset_id}={asset.value}"
+            for asset in recent_assets
+        ]
+    except Exception as e:
+        db_services = 0
+        db_assets = 0
+        recent_assets_info = [f"Error: {e}"]
+    
     return JsonResponse({
         "server_type": "django_iot_server",
         "config_external_url": EXTERNAL_SERVER_GET_BASE_URL,
@@ -380,6 +565,11 @@ def debug_info(request):
             "services": service_info,
             "history_count": len(iot_data_store['history'])
         },
-        "message": "Django IoT server status - local data processing",
+        "database_data": {
+            "total_services": db_services,
+            "total_assets": db_assets,
+            "recent_assets": recent_assets_info
+        },
+        "message": "Django IoT server status - local data processing with async DB storage",
         "timestamp": datetime.now().isoformat() + 'Z'
     })

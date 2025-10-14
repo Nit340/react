@@ -7,11 +7,12 @@ import DemoControls from '../components/Demo/DemoControls';
 
 const OperationsLog = () => {
   const [filters, setFilters] = useState({
-    crane: 'all',
+    crane: 'CRN-001',
     type: 'all',
-    date: 'all'
+    date: 'week'
   });
   const [operationsData, setOperationsData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [metrics, setMetrics] = useState({
     hoist: { total: 0, up: 0, down: 0 },
     ct: { total: 0, left: 0, right: 0 },
@@ -25,6 +26,7 @@ const OperationsLog = () => {
   const [mode, setMode] = useState('polling');
   const [pollingInterval, setPollingInterval] = useState(1000);
   const [isLoading, setIsLoading] = useState(false);
+  const [filtersApplied, setFiltersApplied] = useState(false);
   
   const ws = useRef(null);
   const pollingRef = useRef(null);
@@ -45,16 +47,9 @@ const OperationsLog = () => {
     {
       key: 'crane',
       label: 'Crane',
-      type: 'select',
-      value: filters.crane,
-      options: [
-        { value: 'all', label: 'All Cranes' },
-        { value: 'CRN-001', label: 'Gantry Crane #1 (CRN-001)' },
-        { value: 'CRN-002', label: 'Overhead Crane #2 (CRN-002)' },
-        { value: 'CRN-003', label: 'Jib Crane #3 (CRN-003)' },
-        { value: 'CRN-004', label: 'Bridge Crane #4 (CRN-004)' },
-        { value: 'CRN-005', label: 'Gantry Crane #5 (CRN-005)' }
-      ]
+      type: 'text',
+      value: 'Gantry Crane #1 (CRN-001)',
+      displayOnly: true
     },
     {
       key: 'type',
@@ -68,8 +63,7 @@ const OperationsLog = () => {
         { value: 'ct-left', label: 'CT Left' },
         { value: 'ct-right', label: 'CT Right' },
         { value: 'lt-forward', label: 'LT Forward' },
-        { value: 'lt-reverse', label: 'LT Reverse' },
-        { value: 'switch', label: 'Switching' }
+        { value: 'lt-reverse', label: 'LT Reverse' }
       ]
     },
     {
@@ -78,7 +72,6 @@ const OperationsLog = () => {
       type: 'select',
       value: filters.date,
       options: [
-        { value: 'all', label: 'All Dates' },
         { value: 'today', label: 'Today' },
         { value: 'week', label: 'This Week' },
         { value: 'month', label: 'This Month' }
@@ -195,7 +188,7 @@ const OperationsLog = () => {
                 minute: '2-digit',
                 second: '2-digit',
                 hour12: false
-              }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$1-$2'),
+              }),
               craneId: craneId,
               operation: operationType,
               duration: '0:15',
@@ -216,7 +209,7 @@ const OperationsLog = () => {
 
   // Enhanced polling function with proper state handling
   const fetchData = useCallback(async () => {
-    if (isLoading) return;
+    if (isLoading || filtersApplied) return;
     
     setIsLoading(true);
     
@@ -262,7 +255,7 @@ const OperationsLog = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, processServiceData, updateMetrics]);
+  }, [isLoading, filtersApplied, processServiceData, updateMetrics]);
 
   // WebSocket connection for realtime mode
   const connectWebSocket = useCallback(() => {
@@ -288,18 +281,75 @@ const OperationsLog = () => {
       pollingRef.current = null;
     }
 
+    if (mode === 'polling' && !filtersApplied) {
+      fetchData();
+      pollingRef.current = setInterval(fetchData, pollingInterval);
+    } else if (mode === 'realtime' && !filtersApplied) {
+      connectWebSocket();
+    }
+  }, [mode, pollingInterval, fetchData, connectWebSocket, filtersApplied]);
+
+  // Apply filters - JUST STOP POLLING AND FILTER EXISTING DATA
+  const handleApplyFilters = useCallback((currentFilters = filters) => {
+    // Stop all polling and WebSocket connections
+    if (ws.current) {
+      ws.current.close();
+      ws.current = null;
+    }
+    
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    setFiltersApplied(true);
+    
+    // Filter the existing operations data based on selected filters
+    let filteredOperations = [...operationsData];
+    
+    console.log('Current filters:', currentFilters);
+    console.log('Total operations before filtering:', filteredOperations.length);
+    
+    // Filter by operation type
+    if (currentFilters.type !== 'all') {
+      filteredOperations = filteredOperations.filter(op => op.operation === currentFilters.type);
+      console.log(`Filtered by type '${currentFilters.type}': ${filteredOperations.length} operations`);
+    }
+    
+    // Take only the last 10 operations
+    filteredOperations = filteredOperations.slice(0, 10);
+    
+    console.log(`Final filtered operations: ${filteredOperations.length}`);
+    
+    setFilteredData(filteredOperations);
+    updateMetrics(filteredOperations);
+  }, [filters, operationsData, updateMetrics]);
+
+  // Reset filters and restart data fetching
+  const handleResetFilters = useCallback(() => {
+    setFilters({
+      crane: 'CRN-001',
+      type: 'all',
+      date: 'week'
+    });
+    setFiltersApplied(false);
+    setFilteredData([]);
+    
+    // Restart data fetching based on current mode
     if (mode === 'polling') {
       fetchData();
       pollingRef.current = setInterval(fetchData, pollingInterval);
     } else if (mode === 'realtime') {
       connectWebSocket();
     }
-
-    return () => {
-      if (ws.current) ws.current.close();
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
   }, [mode, pollingInterval, fetchData, connectWebSocket]);
+
+  const handleFilterChange = useCallback((filterKey, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterKey]: value
+    }));
+  }, []);
 
   // Handle mode change
   const handleModeChange = useCallback((newMode) => {
@@ -311,25 +361,8 @@ const OperationsLog = () => {
     setPollingInterval(interval);
   }, []);
 
-  const handleFilterChange = useCallback((filterKey, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterKey]: value
-    }));
-  }, []);
-
-  const handleApplyFilters = useCallback(() => {
-    console.log('Applying filters:', filters);
-    // Filter logic would be implemented here
-  }, [filters]);
-
-  const handleResetFilters = useCallback(() => {
-    setFilters({
-      crane: 'all',
-      type: 'all',
-      date: 'all'
-    });
-  }, []);
+  // Determine which data to display
+  const displayData = filtersApplied ? filteredData : operationsData.slice(0, 10);
 
   return (
     <>
@@ -350,11 +383,24 @@ const OperationsLog = () => {
       <Filter 
         filters={filterConfig}
         onFilterChange={handleFilterChange}
-        onApplyFilters={handleApplyFilters}
+        onApplyFilters={() => handleApplyFilters(filters)}
         onResetFilters={handleResetFilters}
       />
 
-      <OperationsTable operations={operationsData} />
+      {filtersApplied && (
+        <div className="filter-applied-message">
+          <p>Filters applied - Data fetching stopped. Showing filtered data. Click "Reset Filters" to resume live data.</p>
+          <p>Current filter: {filters.type === 'all' ? 'All Types' : filters.type}</p>
+        </div>
+      )}
+
+      {displayData.length === 0 ? (
+        <div className="no-data-message">
+          <p>No data received</p>
+        </div>
+      ) : (
+        <OperationsTable operations={displayData} />
+      )}
     </>
   );
 };

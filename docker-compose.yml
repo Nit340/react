@@ -1,14 +1,30 @@
+version: "3.9"
+
 services:
   backend:
     container_name: ui-backend
-    build: ./backend
+    image: ui-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    networks:
+      - ui-network
 
   frontend:
     container_name: ui-frontend
-    build: ./frontend
+    image: ui-frontend:latest
+    build:
+      context: .                    # Project root
+      dockerfile: frontend/Dockerfile
     ports:
       - "8080:80"
     depends_on:
       - backend
+    networks:
+      - ui-network
+
+networks:
+  ui-network:
+    driver: bridge

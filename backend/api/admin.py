@@ -1,8 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils.safestring import mark_safe
-from .models import Service, Asset, DataHistory, ServiceConfiguration, SystemStatus
+from .models import Crane, Service, Asset, DataHistory, ServiceConfiguration, SystemStatus
 
 class AssetInline(admin.TabularInline):
     """Inline editor for assets within service"""
@@ -39,10 +38,48 @@ class SystemStatusInline(admin.TabularInline):
     def has_add_permission(self, request, obj=None):
         return False
 
+class ServiceInline(admin.TabularInline):
+    """Inline editor for services within crane"""
+    model = Service
+    extra = 1
+    fields = ['name', 'service_type', 'is_active']
+    show_change_link = True
+
+@admin.register(Crane)
+class CraneAdmin(admin.ModelAdmin):
+    list_display = ['name', 'service_count', 'asset_count', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+    list_editable = ['is_active']
+    inlines = [ServiceInline]
+    
+    fieldsets = [
+        ('Crane Information', {
+            'fields': ['name', 'description', 'is_active']
+        }),
+        ('Timestamps', {
+            'fields': ['created_at', 'updated_at'],
+            'classes': ['collapse']
+        })
+    ]
+
+    def service_count(self, obj):
+        count = obj.services.count()
+        url = reverse('admin:iot_data_service_changelist') + f'?crane__id__exact={obj.id}'
+        return format_html('<a href="{}">{}</a>', url, count)
+    service_count.short_description = 'Services'
+
+    def asset_count(self, obj):
+        count = Asset.objects.filter(service__crane=obj).count()
+        url = reverse('admin:iot_data_asset_changelist') + f'?service__crane__id__exact={obj.id}'
+        return format_html('<a href="{}">{}</a>', url, count)
+    asset_count.short_description = 'Assets'
+
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
-    list_display = ['name', 'service_type', 'asset_count', 'is_active', 'created_at', 'updated_at']
-    list_filter = ['service_type', 'is_active', 'created_at', 'updated_at']
+    list_display = ['name', 'crane', 'service_type', 'asset_count', 'is_active', 'created_at']
+    list_filter = ['crane', 'service_type', 'is_active', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
     list_editable = ['is_active']
@@ -50,7 +87,7 @@ class ServiceAdmin(admin.ModelAdmin):
     
     fieldsets = [
         ('Service Information', {
-            'fields': ['name', 'service_type', 'description', 'is_active']
+            'fields': ['crane', 'name', 'service_type', 'description', 'is_active']
         }),
         ('Timestamps', {
             'fields': ['created_at', 'updated_at'],
@@ -95,7 +132,7 @@ class AssetAdmin(admin.ModelAdmin):
     get_display_value.admin_order_field = 'value'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('service')
+        return super().get_queryset(request).select_related('service', 'service__crane')
 
 class ValueRangeFilter(admin.SimpleListFilter):
     """Custom filter for value ranges"""
@@ -199,18 +236,11 @@ class SystemStatusAdmin(admin.ModelAdmin):
     uptime_percentage.short_description = 'Uptime'
 
 # Custom admin site configuration
-admin.site.site_header = 'IoT Data Management System'
-admin.site.site_title = 'IoT Data Admin'
-admin.site.index_title = 'IoT Data Administration'
+admin.site.site_header = 'IoT Crane Data Management System'
+admin.site.site_title = 'IoT Crane Admin'
+admin.site.index_title = 'Crane Data Administration'
 
-# Add custom CSS for better admin interface
-class CustomAdminSite(admin.AdminSite):
-    class Media:
-        css = {
-            'all': ('css/admin_custom.css',)
-        }
-
-# Optional: Custom admin actions
+# Admin actions
 def enable_services(modeladmin, request, queryset):
     queryset.update(is_active=True)
 enable_services.short_description = "Enable selected services"

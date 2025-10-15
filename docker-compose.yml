@@ -1,12 +1,12 @@
-version: "3.9"
-
 services:
   backend:
     container_name: ui-backend
-    image: ui-backend:latest
+    image: ui-backend:armv7
     build:
       context: ./backend
       dockerfile: Dockerfile
+      platforms:
+        - linux/arm/v7
     ports:
       - "8000:8000"
     networks:
@@ -14,10 +14,12 @@ services:
 
   frontend:
     container_name: ui-frontend
-    image: ui-frontend:latest
+    image: ui-frontend:armv7
     build:
-      context: .                    # Project root
+      context: .
       dockerfile: frontend/Dockerfile
+      platforms:
+        - linux/arm/v7
     ports:
       - "8080:80"
     depends_on:

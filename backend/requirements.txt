@@ -13,14 +13,12 @@ Django==5.2.3
 django-cors-headers==4.9.0
 django-extensions==4.1
 djangorestframework==3.16.1
-frozenlist==1.6.0
 graphviz==0.21
 idna==3.10
 MarkupSafe==3.0.2
 multidict==6.4.4
 narwhals==1.44.0
 packaging==25.0
-paho-mqtt==2.1.0
 propcache==0.3.1
 PyJWT==2.10.1
 pytz==2025.2
@@ -29,5 +27,3 @@ sqlparse==0.5.3
 twilio==9.6.2
 tzdata==2025.2
 yarl==1.20.0
-websocket==0.2.1
-websockets==15.0.1

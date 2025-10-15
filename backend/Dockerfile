@@ -8,7 +8,6 @@ WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps \
         build-base \
         libffi-dev \
-        postgresql-dev \
         musl-dev \
         gcc \
         python3-dev \

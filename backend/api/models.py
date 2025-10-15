@@ -2,19 +2,42 @@ from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+class Crane(models.Model):
+    """Represents a crane that contains multiple services"""
+    name = models.CharField(max_length=100, default="Crane", help_text="Name of the crane")
+    description = models.TextField(blank=True, help_text="Description of the crane")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'iot_cranes'
+        verbose_name = 'Crane'
+        verbose_name_plural = 'Cranes'
+
+    def __str__(self):
+        return self.name
+
+    def service_count(self):
+        """Return the number of services for this crane"""
+        return self.services.count()
+    
+    def asset_count(self):
+        """Return the total number of assets across all services"""
+        return Asset.objects.filter(service__crane=self).count()
+
 class Service(models.Model):
     """Represents a service that contains multiple assets"""
     SERVICE_TYPES = [
         ('onboardio', 'Onboard IO'),
         ('modbus', 'Modbus'),
         ('loadcell', 'Load Cell'),
-        ('onboard_io', 'Onboard IO Controls'),
-        ('sensor', 'Sensor'),
-        ('actuator', 'Actuator'),
+        ('io', 'IO Controls'),
         ('other', 'Other'),
     ]
     
-    name = models.CharField(max_length=100, unique=True, help_text="Name of the service (e.g., onboardio, modbus, LoadCell)")
+    crane = models.ForeignKey(Crane, on_delete=models.CASCADE, related_name='services', default=1)
+    name = models.CharField(max_length=100, help_text="Name of the service (e.g., onboardio, modbus, LoadCell)")
     service_type = models.CharField(max_length=20, choices=SERVICE_TYPES, default='other')
     description = models.TextField(blank=True, help_text="Description of the service")
     is_active = models.BooleanField(default=True)
@@ -27,9 +50,10 @@ class Service(models.Model):
         verbose_name = 'Service'
         verbose_name_plural = 'Services'
         indexes = [
-            models.Index(fields=['name', 'is_active']),
+            models.Index(fields=['name']),
             models.Index(fields=['service_type']),
         ]
+        unique_together = ['crane', 'name']
 
     def __str__(self):
         return f"{self.name} ({self.get_service_type_display()})"
@@ -53,9 +77,6 @@ class Asset(models.Model):
         ('power', 'Power'),
         ('frequency', 'Frequency'),
         ('load', 'Load'),
-        ('temperature', 'Temperature'),
-        ('pressure', 'Pressure'),
-        ('status', 'Status'),
         ('other', 'Other'),
     ]
 
@@ -66,11 +87,6 @@ class Asset(models.Model):
         ('kW', 'Kilowatts'),
         ('Hz', 'Hertz'),
         ('kg', 'Kilograms'),
-        ('°C', 'Celsius'),
-        ('°F', 'Fahrenheit'),
-        ('Pa', 'Pascal'),
-        ('%', 'Percentage'),
-        ('rpm', 'RPM'),
     ]
 
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='assets')
@@ -79,14 +95,14 @@ class Asset(models.Model):
     timestamp = models.DateTimeField(help_text="Timestamp from the IoT device")
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # Additional fields for better data management
+    # Additional fields
     value_type = models.CharField(max_length=20, choices=VALUE_TYPES, default='analog')
     unit = models.CharField(max_length=10, choices=UNITS, blank=True)
     is_active = models.BooleanField(default=True)
     
-    # For digital values, we can store the state name
-    state_0_name = models.CharField(max_length=50, blank=True, default='Off', help_text="Name for state 0 (for digital values)")
-    state_1_name = models.CharField(max_length=50, blank=True, default='On', help_text="Name for state 1 (for digital values)")
+    # For digital values
+    state_0_name = models.CharField(max_length=50, blank=True, default='Off', help_text="Name for state 0")
+    state_1_name = models.CharField(max_length=50, blank=True, default='On', help_text="Name for state 1")
 
     class Meta:
         db_table = 'iot_assets'
@@ -94,9 +110,6 @@ class Asset(models.Model):
         indexes = [
             models.Index(fields=['service', 'asset_id']),
             models.Index(fields=['timestamp']),
-            models.Index(fields=['asset_id']),
-            models.Index(fields=['value_type']),
-            models.Index(fields=['is_active']),
         ]
         verbose_name = 'Asset'
         verbose_name_plural = 'Assets'
@@ -120,12 +133,11 @@ class Asset(models.Model):
         asset_id_lower = self.asset_id.lower()
         
         type_mapping = [
-            ('voltage', ['voltage', 'v_']),
-            ('current', ['current', 'amp', 'a_']),
-            ('power', ['power', 'watt', 'kw']),
-            ('frequency', ['frequency', 'freq', 'hz']),
+            ('voltage', ['voltage']),
+            ('current', ['current', 'amp']),
+            ('power', ['power']),
+            ('frequency', ['frequency', 'freq']),
             ('load', ['load', 'weight', 'capacity']),
-            ('temperature', ['temp', 'temperature']),
             ('digital', ['in', 'out', 'start', 'stop', 'hoist', 'ct_', 'lt_']),
         ]
         
@@ -145,7 +157,6 @@ class Asset(models.Model):
             ('kW', ['power']),
             ('Hz', ['frequency', 'freq']),
             ('kg', ['load', 'weight']),
-            ('°C', ['temp']),
         ]
         
         for unit, keywords in unit_mapping:
@@ -175,7 +186,6 @@ class DataHistory(models.Model):
         indexes = [
             models.Index(fields=['service', 'asset', 'timestamp']),
             models.Index(fields=['timestamp']),
-            models.Index(fields=['asset', 'timestamp']),
         ]
         verbose_name = 'Data History'
         verbose_name_plural = 'Data History'

@@ -27,14 +27,11 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 
-# ✅ Copy all files except unwanted ones
 COPY . .
 
-# ✅ Remove any local DB, caches, and temp files that might have been copied
 RUN rm -f db.sqlite3 \
     && rm -rf __pycache__/ */__pycache__/ .pytest_cache/ *.log
 
-# ✅ Optional cleanup for image size
 RUN rm -rf /var/cache/apk/* /root/.cache \
     && find /usr/local -type d -name "__pycache__" -exec rm -rf {} + \
     && find /usr/local/lib/python3.11/site-packages -name "tests" -exec rm -rf {} + \
@@ -45,5 +42,16 @@ USER appuser
 
 EXPOSE 8000
 
-# ✅ Run migrations automatically and start server
-CMD ["sh", "-c", "python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
+# ✅ Environment variables for Django superuser
+ENV DJANGO_SUPERUSER_USERNAME=inno \
+    DJANGO_SUPERUSER_PASSWORD=InnoSpace@2025 \
+    DJANGO_SUPERUSER_EMAIL=inno@example.com
+
+# ✅ Run migrations, create superuser (non-interactive), and start server
+CMD ["sh", "-c", "\
+python manage.py makemigrations && \
+python manage.py migrate && \
+python manage.py createsuperuser --noinput || true && \
+python manage.py runserver 0.0.0.0:8000 \
+"]
+

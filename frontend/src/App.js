@@ -16,6 +16,7 @@ import South from './pages/South/South';
 import SouthConfig from './pages/South/SouthConfig';
 import Demo from './pages/Demo';
 import CraneDetails from './pages/CraneDetails';  
+import NotificationHandler from './components/NotificationHandler';
 // Styles
 import './App.css';
 import './CSS/Dashboard.css';
@@ -28,6 +29,7 @@ import './CSS/EnergyMonitoring.css';
 import './CSS/Demo.css';
 // In App.js, add this import with the others
 import './CSS/Load.css';
+import './CSS/RuleEngine.css';
 
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -41,10 +43,12 @@ function App() {
         />
         <div className="main-content">
           <Header />
+          <NotificationHandler />
+
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/south" element={<South />} />
-            <Route path="/demo" element={<Demo />} />
+            <Route path="/real" element={<Demo />} />
             <Route path="/operations" element={<OperationsLog />} />
             <Route path="/load" element={<Load />} />
             <Route path="/energy" element={<EnergyMonitoring />} />

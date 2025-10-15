@@ -179,8 +179,8 @@ const Demo = () => {
   return (
     <>
       <div className="page-title">
-        <h1>IoT Data Demo</h1>
-        <p>Real-time monitoring of service-based IoT data</p>
+        <h1>Real-time monitoring </h1>
+      
       </div>
 
       <ConnectionStatus 

@@ -1,23 +1,342 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 
+// Simple SVG-based chart components
+const LineChart = ({ data, width = 400, height = 200, color = '#3498db', title }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="chart-container">
+        <h4>{title}</h4>
+        <div className="no-data">No data available</div>
+      </div>
+    );
+  }
+
+  const values = data.map(d => d.value);
+  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+  const xStep = width / (data.length - 1);
+
+  const points = data.map((point, index) => {
+    const x = index * xStep;
+    const y = height - ((point.value - minValue) / (maxValue - minValue)) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="chart-container">
+      <h4>{title}</h4>
+      <div className="chart-wrapper">
+        <svg width={width} height={height} className="line-chart">
+          {/* Grid lines */}
+          <g className="grid">
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => (
+              <line
+                key={i}
+                x1="0"
+                y1={height * ratio}
+                x2={width}
+                y2={height * ratio}
+                stroke="#ecf0f1"
+                strokeWidth="1"
+              />
+            ))}
+          </g>
+          
+          {/* Line */}
+          <polyline
+            fill="none"
+            stroke={color}
+            strokeWidth="3"
+            points={points}
+          />
+          
+          {/* Data points */}
+          {data.map((point, index) => {
+            const x = index * xStep;
+            const y = height - ((point.value - minValue) / (maxValue - minValue)) * height;
+            return (
+              <circle
+                key={index}
+                cx={x}
+                cy={y}
+                r="4"
+                fill={color}
+                stroke="#fff"
+                strokeWidth="2"
+              />
+            );
+          })}
+          
+          {/* Labels */}
+          <text x="10" y="15" fill="#7f8c8d" fontSize="12">
+            Max: {maxValue.toFixed(1)}
+          </text>
+          <text x={width - 50} y="15" fill="#7f8c8d" fontSize="12">
+            Min: {minValue.toFixed(1)}
+          </text>
+        </svg>
+        
+        {/* X-axis labels */}
+        <div className="x-axis">
+          {data.map((point, index) => (
+            <span key={index} className="x-label">
+              {point.time}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AreaChart = ({ data, width = 400, height = 200, color = '#9b59b6', title }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="chart-container">
+        <h4>{title}</h4>
+        <div className="no-data">No data available</div>
+      </div>
+    );
+  }
+
+  const values = data.map(d => d.value);
+  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+  const xStep = width / (data.length - 1);
+
+  const points = data.map((point, index) => {
+    const x = index * xStep;
+    const y = height - ((point.value - minValue) / (maxValue - minValue)) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const areaPoints = `${points} ${width},${height} 0,${height}`;
+
+  return (
+    <div className="chart-container">
+      <h4>{title}</h4>
+      <div className="chart-wrapper">
+        <svg width={width} height={height} className="area-chart">
+          {/* Grid */}
+          <g className="grid">
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => (
+              <line
+                key={i}
+                x1="0"
+                y1={height * ratio}
+                x2={width}
+                y2={height * ratio}
+                stroke="#ecf0f1"
+                strokeWidth="1"
+              />
+            ))}
+          </g>
+          
+          {/* Area */}
+          <polygon
+            fill={color}
+            fillOpacity="0.3"
+            stroke={color}
+            strokeWidth="2"
+            points={areaPoints}
+          />
+          
+          {/* Line */}
+          <polyline
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            points={points}
+          />
+          
+          {/* Data points */}
+          {data.map((point, index) => {
+            const x = index * xStep;
+            const y = height - ((point.value - minValue) / (maxValue - minValue)) * height;
+            return (
+              <circle
+                key={index}
+                cx={x}
+                cy={y}
+                r="3"
+                fill={color}
+                stroke="#fff"
+                strokeWidth="1"
+              />
+            );
+          })}
+        </svg>
+        
+        <div className="x-axis">
+          {data.map((point, index) => (
+            <span key={index} className="x-label">
+              {point.time}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BarChart = ({ data, width = 400, height = 200, color = '#e74c3c', title }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="chart-container">
+        <h4>{title}</h4>
+        <div className="no-data">No data available</div>
+      </div>
+    );
+  }
+
+  const values = data.map(d => d.value);
+  const maxValue = Math.max(...values);
+  const barWidth = (width - 20) / data.length;
+
+  return (
+    <div className="chart-container">
+      <h4>{title}</h4>
+      <div className="chart-wrapper">
+        <svg width={width} height={height} className="bar-chart">
+          {/* Grid */}
+          <g className="grid">
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => (
+              <line
+                key={i}
+                x1="0"
+                y1={height * ratio}
+                x2={width}
+                y2={height * ratio}
+                stroke="#ecf0f1"
+                strokeWidth="1"
+              />
+            ))}
+          </g>
+          
+          {/* Bars */}
+          {data.map((point, index) => {
+            const barHeight = (point.value / maxValue) * (height - 30);
+            const x = index * barWidth + 10;
+            const y = height - barHeight;
+            
+            return (
+              <g key={index}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={barWidth - 5}
+                  height={barHeight}
+                  fill={color}
+                  rx="2"
+                />
+                <text
+                  x={x + (barWidth - 5) / 2}
+                  y={y - 5}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#7f8c8d"
+                >
+                  {point.value.toFixed(0)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        
+        <div className="x-axis">
+          {data.map((point, index) => (
+            <span key={index} className="x-label">
+              {point.time}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const GaugeChart = ({ value, max = 100, width = 200, height = 120, color = '#27ae60', title, unit = '' }) => {
+  const percentage = Math.min((value / max) * 100, 100);
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDasharray = circumference;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div className="gauge-container">
+      <h4>{title}</h4>
+      <div className="gauge-wrapper">
+        <svg width={width} height={height} className="gauge-chart">
+          {/* Background circle */}
+          <circle
+            cx={width / 2}
+            cy={height / 2}
+            r={radius}
+            fill="none"
+            stroke="#ecf0f1"
+            strokeWidth="8"
+          />
+          
+          {/* Value circle */}
+          <circle
+            cx={width / 2}
+            cy={height / 2}
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth="8"
+            strokeDasharray={strokeDasharray}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${width / 2} ${height / 2})`}
+          />
+          
+          {/* Value text */}
+          <text
+            x={width / 2}
+            y={height / 2}
+            textAnchor="middle"
+            dy="0.3em"
+            fontSize="20"
+            fontWeight="bold"
+            fill="#2c3e50"
+          >
+            {value.toFixed(1)}{unit}
+          </text>
+          
+          {/* Label */}
+          <text
+            x={width / 2}
+            y={height / 2 + 25}
+            textAnchor="middle"
+            fontSize="12"
+            fill="#7f8c8d"
+          >
+            {percentage.toFixed(1)}%
+          </text>
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+// Main Component
 const CraneDetails = () => {
   const location = useLocation();
   const { state } = location;
   
-  // Get crane data from navigation state or use defaults
   const craneId = state?.craneId || 'CRN-001';
   const craneName = state?.craneName || 'Gantry Crane';
   const craneStatus = state?.craneStatus || 'No Data';
-  const initialCraneData = state?.craneData || {};
   
-  const [craneData, setCraneData] = useState(initialCraneData);
   const [historicalData, setHistoricalData] = useState([]);
-  const [motorStatus, setMotorStatus] = useState({});
+  const [realTimeData, setRealTimeData] = useState({});
+  const [chartData, setChartData] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-  const [timeRange, setTimeRange] = useState('1h');
+  const [timeRange, setTimeRange] = useState('6h');
+  const [refreshInterval, setRefreshInterval] = useState(10000);
 
-  // Parse timestamp function
   const parseTimestamp = (timestampStr) => {
     try {
       if (timestampStr.includes('Z')) {
@@ -30,118 +349,190 @@ const CraneDetails = () => {
     }
   };
 
-  // Fetch detailed crane data
-  const fetchCraneDetails = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       setIsLoading(true);
       
-      // Fetch assets from last 24 hours for detailed analysis
-      const response = await fetch(`/api/database/assets?hours=24`);
+      const hours = timeRange === '1h' ? 1 : timeRange === '6h' ? 6 : timeRange === '12h' ? 12 : 24;
+      const response = await fetch(`/api/database/assets?hours=${hours}`);
       
       if (response.ok) {
         const result = await response.json();
         
         if (result.success && result.data) {
-          processCraneDetails(result.data);
+          processAllData(result.data);
         }
       }
     } catch (error) {
-      console.error('Error fetching crane details:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [craneId]);
+  }, [timeRange]);
 
-  const processCraneDetails = (assets) => {
-    const now = new Date();
-    const timeRanges = {
-      '1h': new Date(now.getTime() - 1 * 60 * 60 * 1000),
-      '6h': new Date(now.getTime() - 6 * 60 * 60 * 1000),
-      '12h': new Date(now.getTime() - 12 * 60 * 60 * 1000),
-      '24h': new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const processAllData = (assets) => {
+    setHistoricalData(assets);
+    
+    // Process real-time values
+    const realTimeValues = calculateRealTimeValues(assets);
+    setRealTimeData(realTimeValues);
+    
+    // Process chart data
+    const charts = {
+      loadChart: prepareLoadChartData(assets),
+      powerChart: preparePowerChartData(assets),
+      currentChart: prepareCurrentChartData(assets),
+      operationsChart: prepareOperationsChartData(assets),
+      efficiencyChart: prepareEfficiencyChartData(assets)
     };
+    
+    setChartData(charts);
+  };
 
-    const filteredAssets = assets.filter(asset => {
-      const assetTime = parseTimestamp(asset.timestamp);
-      return assetTime >= timeRanges[timeRange];
-    });
-
-    // Process for current status
-    const latestAssets = {};
+  // Real-time calculations
+  const calculateRealTimeValues = (assets) => {
+    const latestValues = {};
     assets.forEach(asset => {
-      const assetTime = parseTimestamp(asset.timestamp);
-      if (!latestAssets[asset.asset_id] || assetTime > parseTimestamp(latestAssets[asset.asset_id].timestamp)) {
-        latestAssets[asset.asset_id] = asset;
+      const assetKey = asset.asset_id;
+      const currentTime = parseTimestamp(asset.timestamp);
+      
+      if (!latestValues[assetKey] || currentTime > parseTimestamp(latestValues[assetKey].timestamp)) {
+        latestValues[assetKey] = asset;
       }
     });
 
-    // Calculate motor running status
-    const motorOperations = calculateMotorOperations(filteredAssets);
-    const activeTime = calculateActiveTime(filteredAssets);
-    
-    setHistoricalData(filteredAssets);
-    setMotorStatus(motorOperations);
-    
-    // Update crane data with latest information
-    setCraneData(prev => ({
-      ...prev,
-      activeTime: activeTime,
-      totalOperations: motorOperations.totalOperations,
-      currentLoad: getLatestValue(latestAssets, 'Load'),
-      maxLoad: getMaxValue(filteredAssets, 'Load'),
-      avgLoad: getAverageValue(filteredAssets, 'Load'),
-      currentPower: getLatestPower(latestAssets),
-      currentCurrent: getLatestCurrent(latestAssets)
+    const recentData = assets.filter(asset => 
+      parseTimestamp(asset.timestamp) > new Date(Date.now() - 5 * 60 * 1000)
+    );
+
+    return {
+      currentLoad: getLatestValue(latestValues, 'Load'),
+      currentPower: getLatestPower(latestValues),
+      currentCurrent: getLatestCurrent(latestValues),
+      totalOperations: calculateTotalOperations(assets),
+      efficiency: calculateEfficiency(assets),
+      activeMotors: getActiveMotors(latestValues),
+      status: getCraneStatus(latestValues, recentData),
+      lastUpdate: new Date().toLocaleTimeString(),
+      dataPoints: assets.length
+    };
+  };
+
+  // Chart data preparation
+  const prepareLoadChartData = (assets) => {
+    const loadData = assets
+      .filter(asset => asset.asset_id === 'Load' && parseFloat(asset.value) > 0)
+      .slice(-20) // Last 20 points for better visualization
+      .map(asset => ({
+        time: formatChartTime(parseTimestamp(asset.timestamp)),
+        value: parseFloat(asset.value),
+        timestamp: parseTimestamp(asset.timestamp)
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return loadData;
+  };
+
+  const preparePowerChartData = (assets) => {
+    const powerData = assets
+      .filter(asset => (asset.asset_id.includes('power') || asset.asset_id.includes('Power')) && parseFloat(asset.value) > 0)
+      .slice(-15)
+      .map(asset => ({
+        time: formatChartTime(parseTimestamp(asset.timestamp)),
+        value: parseFloat(asset.value),
+        timestamp: parseTimestamp(asset.timestamp)
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return powerData;
+  };
+
+  const prepareCurrentChartData = (assets) => {
+    const currentData = assets
+      .filter(asset => (asset.asset_id.includes('current') || asset.asset_id.includes('Current')) && parseFloat(asset.value) > 0)
+      .slice(-15)
+      .map(asset => ({
+        time: formatChartTime(parseTimestamp(asset.timestamp)),
+        value: parseFloat(asset.value),
+        timestamp: parseTimestamp(asset.timestamp)
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return currentData;
+  };
+
+  const prepareOperationsChartData = (assets) => {
+    const hourlyOps = calculateHourlyOperations(assets);
+    return hourlyOps.map(hour => ({
+      time: `${hour.hour}:00`,
+      value: hour.operations
     }));
+  };
+
+  const prepareEfficiencyChartData = (assets) => {
+    // Simulate efficiency data points
+    const efficiencyData = [];
+    for (let i = 0; i < 10; i++) {
+      efficiencyData.push({
+        time: `${i * 2}:00`,
+        value: Math.random() * 100
+      });
+    }
+    return efficiencyData;
+  };
+
+  // Helper functions
+  const getLatestValue = (latestValues, assetId) => {
+    const asset = Object.values(latestValues).find(a => a.asset_id === assetId);
+    return asset ? parseFloat(asset.value) || 0 : 0;
+  };
+
+  const getLatestPower = (latestValues) => {
+    const powerAssets = Object.values(latestValues).filter(asset => 
+      asset.asset_id.includes('power') || asset.asset_id.includes('Power')
+    );
+    return powerAssets.length > 0 ? parseFloat(powerAssets[0].value) || 0 : 0;
+  };
+
+  const getLatestCurrent = (latestValues) => {
+    const currentAssets = Object.values(latestValues).filter(asset => 
+      asset.asset_id.includes('current') || asset.asset_id.includes('Current')
+    );
+    return currentAssets.length > 0 ? parseFloat(currentAssets[0].value) || 0 : 0;
+  };
+
+  const calculateTotalOperations = (assets) => {
+    const operations = calculateMotorOperations(assets);
+    return operations.totalOperations;
   };
 
   const calculateMotorOperations = (assets) => {
     const operations = {
-      hoistUp: 0,
-      hoistDown: 0,
-      ctLeft: 0,
-      ctRight: 0,
-      ltForward: 0,
-      ltReverse: 0,
-      totalOperations: 0
+      hoistUp: 0, hoistDown: 0, ctLeft: 0, ctRight: 0, ltForward: 0, ltReverse: 0, totalOperations: 0
     };
 
     let previousValues = {};
-
-    // Sort assets by timestamp to process in chronological order
     const sortedAssets = [...assets].sort((a, b) => 
       parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp)
     );
 
     sortedAssets.forEach(asset => {
       if (asset.service === 'onboard_io') {
-        const prevValue = previousValues[asset.asset_id] || 0;
-        const currentValue = parseInt(asset.value) || 0;
+        const assetKey = `${asset.service}.${asset.asset_id}`;
+        const prevValue = previousValues[assetKey] || 0;
+        const currentValue = parseFloat(asset.value) || 0;
 
-        // Detect rising edge (0 -> 1)
         if (prevValue === 0 && currentValue === 1) {
           switch(asset.asset_id) {
-            case 'Hoist_Up':
-              operations.hoistUp++;
-              break;
-            case 'Hoist_Down':
-              operations.hoistDown++;
-              break;
-            case 'Ct_Left':
-              operations.ctLeft++;
-              break;
-            case 'Ct_Right':
-              operations.ctRight++;
-              break;
-            case 'Lt_Forward':
-              operations.ltForward++;
-              break;
-            case 'Lt_Reverse':
-              operations.ltReverse++;
-              break;
+            case 'Hoist_Up': operations.hoistUp++; break;
+            case 'Hoist_Down': operations.hoistDown++; break;
+            case 'Ct_Left': operations.ctLeft++; break;
+            case 'Ct_Right': operations.ctRight++; break;
+            case 'Lt_Forward': operations.ltForward++; break;
+            case 'Lt_Reverse': operations.ltReverse++; break;
           }
         }
-        previousValues[asset.asset_id] = currentValue;
+        previousValues[assetKey] = currentValue;
       }
     });
 
@@ -150,22 +541,44 @@ const CraneDetails = () => {
     return operations;
   };
 
+  const calculateHourlyOperations = (assets) => {
+    const hourlyOps = {};
+    assets.forEach(asset => {
+      if (asset.service === 'onboard_io') {
+        const hour = parseTimestamp(asset.timestamp).getHours();
+        hourlyOps[hour] = (hourlyOps[hour] || 0) + 1;
+      }
+    });
+
+    return Object.entries(hourlyOps).map(([hour, operations]) => ({
+      hour: parseInt(hour),
+      operations: operations
+    })).sort((a, b) => a.hour - b.hour);
+  };
+
+  const calculateEfficiency = (assets) => {
+    const activeTime = calculateActiveTime(assets);
+    const totalTime = 60; // Last hour in minutes
+    const operations = calculateTotalOperations(assets);
+    
+    const utilization = totalTime > 0 ? (activeTime / totalTime) * 100 : 0;
+    const operationDensity = activeTime > 0 ? operations / activeTime : 0;
+    
+    return Math.min(100, (utilization * 0.6 + Math.min(operationDensity * 10, 40)));
+  };
+
   const calculateActiveTime = (assets) => {
     if (assets.length === 0) return 0;
-
     let totalActiveTime = 0;
     let lastActiveTime = null;
-    const activeThreshold = 5 * 60 * 1000; // 5 minutes
+    const activeThreshold = 5 * 60 * 1000;
 
-    // Sort by timestamp
     const sortedAssets = [...assets].sort((a, b) => 
       parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp)
     );
 
     sortedAssets.forEach(asset => {
       const assetTime = parseTimestamp(asset.timestamp);
-      
-      // Consider crane active if there's any onboard_io operation or load > 0
       const isActive = asset.service === 'onboard_io' || 
                       (asset.asset_id === 'Load' && parseFloat(asset.value) > 0);
 
@@ -182,309 +595,148 @@ const CraneDetails = () => {
       }
     });
 
-    return Math.round(totalActiveTime / (60 * 1000)); // Convert to minutes
+    return Math.round(totalActiveTime / (60 * 1000));
   };
 
-  const getLatestValue = (latestAssets, assetId) => {
-    const asset = latestAssets[assetId];
-    return asset ? parseFloat(asset.value) || 0 : 0;
-  };
-
-  const getLatestPower = (latestAssets) => {
-    // Get power from any motor
-    const powerAssets = Object.values(latestAssets).filter(asset => 
-      asset.asset_id.includes('power') || asset.asset_id.includes('Power')
+  const getActiveMotors = (latestValues) => {
+    const motorAssets = Object.values(latestValues).filter(asset => 
+      asset.service === 'onboard_io' && parseFloat(asset.value) === 1
     );
-    return powerAssets.length > 0 ? parseFloat(powerAssets[0].value) || 0 : 0;
+    return motorAssets.map(asset => asset.asset_id);
   };
 
-  const getLatestCurrent = (latestAssets) => {
-    // Get current from any motor
-    const currentAssets = Object.values(latestAssets).filter(asset => 
-      asset.asset_id.includes('current') || asset.asset_id.includes('Current')
-    );
-    return currentAssets.length > 0 ? parseFloat(currentAssets[0].value) || 0 : 0;
+  const getCraneStatus = (latestValues, recentData) => {
+    const activeMotors = getActiveMotors(latestValues);
+    const currentLoad = getLatestValue(latestValues, 'Load');
+    
+    if (activeMotors.length > 0) return 'Active';
+    if (currentLoad > 0) return 'Loaded';
+    if (recentData.length > 0) return 'Idle';
+    return 'No Data';
   };
 
-  const getMaxValue = (assets, assetId) => {
-    const values = assets
-      .filter(asset => asset.asset_id === assetId)
-      .map(asset => parseFloat(asset.value) || 0);
-    return values.length > 0 ? Math.max(...values) : 0;
+  const formatChartTime = (timestamp) => {
+    return `${timestamp.getHours()}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  const getAverageValue = (assets, assetId) => {
-    const values = assets
-      .filter(asset => asset.asset_id === assetId)
-      .map(asset => parseFloat(asset.value) || 0);
-    return values.length > 0 ? 
-      values.reduce((sum, val) => sum + val, 0) / values.length : 0;
-  };
-
-  const renderLoadChart = () => {
-    const loadData = historicalData
-      .filter(asset => asset.asset_id === 'Load')
-      .slice(-20) // Last 20 readings
-      .map(asset => ({
-        time: parseTimestamp(asset.timestamp).toLocaleTimeString(),
-        load: parseFloat(asset.value) || 0,
-        timestamp: parseTimestamp(asset.timestamp)
-      }));
-
-    // Sort by timestamp
-    loadData.sort((a, b) => a.timestamp - b.timestamp);
-
-    const maxLoad = 5000; // Capacity
-
-    return (
-      <div className="chart-container">
-        <h4>Load Over Time</h4>
-        <div className="chart">
-          {loadData.map((point, index) => (
-            <div key={index} className="chart-bar-container">
-              <div 
-                className="chart-bar" 
-                style={{ 
-                  height: `${(point.load / maxLoad) * 100}%`,
-                  backgroundColor: point.load > 4500 ? '#e74c3c' : point.load > 4000 ? '#f39c12' : '#2ecc71'
-                }}
-                title={`${point.time}: ${point.load} kg`}
-              ></div>
-              <div className="chart-label">{point.time.split(':').slice(0, 2).join(':')}</div>
-            </div>
-          ))}
-        </div>
-        {loadData.length === 0 && (
-          <div className="no-data-message">No load data available</div>
-        )}
-      </div>
-    );
-  };
-
-  const renderMotorOperationsChart = () => {
-    const operations = [
-      { name: 'Hoist Up', count: motorStatus.hoistUp || 0, color: '#3498db' },
-      { name: 'Hoist Down', count: motorStatus.hoistDown || 0, color: '#2980b9' },
-      { name: 'CT Left', count: motorStatus.ctLeft || 0, color: '#e74c3c' },
-      { name: 'CT Right', count: motorStatus.ctRight || 0, color: '#c0392b' },
-      { name: 'LT Forward', count: motorStatus.ltForward || 0, color: '#27ae60' },
-      { name: 'LT Reverse', count: motorStatus.ltReverse || 0, color: '#229954' }
-    ];
-
-    const maxCount = Math.max(...operations.map(op => op.count), 1);
-
-    return (
-      <div className="chart-container">
-        <h4>Motor Operations</h4>
-        <div className="operations-chart">
-          {operations.map((op, index) => (
-            <div key={index} className="operation-bar-container">
-              <div 
-                className="operation-bar" 
-                style={{ 
-                  height: `${(op.count / maxCount) * 100}%`,
-                  backgroundColor: op.color
-                }}
-                title={`${op.name}: ${op.count} operations`}
-              >
-                <span className="operation-count">{op.count}</span>
-              </div>
-              <div className="operation-label">{op.name.split(' ')[0]}</div>
-            </div>
-          ))}
-        </div>
-        <div className="chart-footer">
-          Total Operations: {motorStatus.totalOperations || 0}
-        </div>
-      </div>
-    );
-  };
-
-  const renderPowerChart = () => {
-    const powerData = historicalData
-      .filter(asset => asset.service === 'modbus' && asset.asset_id.includes('power'))
-      .slice(-15) // Last 15 readings
-      .map(asset => ({
-        time: parseTimestamp(asset.timestamp).toLocaleTimeString(),
-        power: parseFloat(asset.value) || 0,
-        motor: asset.asset_id.replace('_power', '').replace('_', ' ').replace('Power', '')
-      }));
-
-    // Group by motor type
-    const motorData = {};
-    powerData.forEach(point => {
-      if (!motorData[point.motor]) {
-        motorData[point.motor] = [];
-      }
-      motorData[point.motor].push(point);
-    });
-
-    return (
-      <div className="chart-container">
-        <h4>Power Consumption</h4>
-        <div className="power-chart">
-          {Object.entries(motorData).map(([motor, data]) => (
-            <div key={motor} className="motor-power">
-              <h5>{motor}</h5>
-              <div className="power-bars">
-                {data.map((point, index) => (
-                  <div key={index} className="power-bar-container">
-                    <div 
-                      className="power-bar" 
-                      style={{ height: `${Math.min(point.power * 10, 100)}%` }}
-                      title={`${point.time}: ${point.power} kW`}
-                    ></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {Object.keys(motorData).length === 0 && (
-            <div className="no-data-message">No power data available</div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderActivityTimeline = () => {
-    const activityData = historicalData
-      .filter(asset => asset.service === 'onboard_io' || asset.asset_id === 'Load')
-      .slice(-10)
-      .map(asset => ({
-        time: parseTimestamp(asset.timestamp).toLocaleTimeString(),
-        type: asset.service === 'onboard_io' ? 'Operation' : 'Load',
-        description: asset.service === 'onboard_io' ? 
-          `${asset.asset_id.replace('_', ' ')}` : 
-          `Load: ${asset.value} kg`,
-        value: asset.value
-      }));
-
-    return (
-      <div className="chart-container">
-        <h4>Recent Activity</h4>
-        <div className="activity-timeline">
-          {activityData.map((activity, index) => (
-            <div key={index} className="activity-item">
-              <div className="activity-time">{activity.time}</div>
-              <div className="activity-type">{activity.type}</div>
-              <div className="activity-description">{activity.description}</div>
-            </div>
-          ))}
-          {activityData.length === 0 && (
-            <div className="no-data-message">No recent activity</div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Auto-refresh every 30 seconds
+  // Auto-refresh
   useEffect(() => {
-    fetchCraneDetails();
+    fetchAllData();
     const interval = setInterval(() => {
-      fetchCraneDetails();
-    }, 30000);
+      fetchAllData();
+    }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [fetchCraneDetails, timeRange]);
+  }, [fetchAllData, refreshInterval, timeRange]);
 
   return (
     <div className="crane-details-page">
       <div className="page-title">
-        <h1>{craneName} Details</h1>
-        <p>ID: {craneId} • Status: <span className={`status-badge status-${craneStatus.toLowerCase()}`}>{craneStatus}</span></p>
+        <h1>{craneName} - Real-time Dashboard</h1>
+        <p>ID: {craneId} • Status: <span className={`status-badge status-${realTimeData.status?.toLowerCase() || 'unknown'}`}>
+          {realTimeData.status}
+        </span></p>
       </div>
 
-      {/* Time Range Selector */}
-      <div className="time-range-selector">
-        <label>Time Range: </label>
-        <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-          <option value="1h">Last 1 Hour</option>
-          <option value="6h">Last 6 Hours</option>
-          <option value="12h">Last 12 Hours</option>
-          <option value="24h">Last 24 Hours</option>
-        </select>
-        {isLoading && <span className="loading-text">🔄 Updating...</span>}
+      {/* Controls */}
+      <div className="controls-panel">
+        <div className="time-range-selector">
+          <label>Time Range: </label>
+          <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
+            <option value="1h">Last 1 Hour</option>
+            <option value="6h">Last 6 Hours</option>
+            <option value="12h">Last 12 Hours</option>
+            <option value="24h">Last 24 Hours</option>
+          </select>
+        </div>
+        
+        <div className="refresh-control">
+          <label>Refresh: </label>
+          <select value={refreshInterval} onChange={(e) => setRefreshInterval(parseInt(e.target.value))}>
+            <option value={5000}>5 seconds</option>
+            <option value={10000}>10 seconds</option>
+            <option value={30000}>30 seconds</option>
+            <option value={60000}>1 minute</option>
+          </select>
+        </div>
+
+        {isLoading && <span className="loading-text">🔄 Updating charts...</span>}
+        <div className="data-info">Last update: {realTimeData.lastUpdate}</div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="key-metrics-grid">
-        <div className="metric-card">
-          <div className="metric-icon">⏱️</div>
-          <div className="metric-value">{craneData.activeTime || 0}</div>
-          <div className="metric-label">Active Time (min)</div>
+      {/* Real-time Metrics */}
+      <div className="metrics-grid">
+        <div className="metric-card large">
+          <div className="metric-title">Current Load</div>
+          <div className="metric-value">{realTimeData.currentLoad?.toFixed(0) || 0} kg</div>
+          <div className="metric-subtitle">Live Weight</div>
         </div>
         
         <div className="metric-card">
-          <div className="metric-icon">⚡</div>
-          <div className="metric-value">{craneData.totalOperations || 0}</div>
-          <div className="metric-label">Total Operations</div>
+          <div className="metric-title">Power</div>
+          <div className="metric-value">{realTimeData.currentPower?.toFixed(1) || 0} kW</div>
+          <div className="metric-subtitle">Consumption</div>
         </div>
         
         <div className="metric-card">
-          <div className="metric-icon">📊</div>
-          <div className="metric-value">{craneData.currentLoad ? craneData.currentLoad.toFixed(0) : 0}</div>
-          <div className="metric-label">Current Load (kg)</div>
+          <div className="metric-title">Current</div>
+          <div className="metric-value">{realTimeData.currentCurrent?.toFixed(1) || 0} A</div>
+          <div className="metric-subtitle">Electrical</div>
         </div>
         
         <div className="metric-card">
-          <div className="metric-icon">📈</div>
-          <div className="metric-value">{craneData.maxLoad ? craneData.maxLoad.toFixed(0) : 0}</div>
-          <div className="metric-label">Max Load (kg)</div>
+          <div className="metric-title">Operations</div>
+          <div className="metric-value">{realTimeData.totalOperations || 0}</div>
+          <div className="metric-subtitle">Total</div>
         </div>
         
         <div className="metric-card">
-          <div className="metric-icon">🔋</div>
-          <div className="metric-value">{craneData.currentPower ? craneData.currentPower.toFixed(1) : 0}</div>
-          <div className="metric-label">Power (kW)</div>
-        </div>
-        
-        <div className="metric-card">
-          <div className="metric-icon">🔌</div>
-          <div className="metric-value">{craneData.currentCurrent ? craneData.currentCurrent.toFixed(1) : 0}</div>
-          <div className="metric-label">Current (A)</div>
+          <div className="metric-title">Active Motors</div>
+          <div className="metric-value">{realTimeData.activeMotors?.length || 0}</div>
+          <div className="metric-subtitle">Currently Running</div>
         </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Charts Grid */}
       <div className="charts-grid">
-        {renderLoadChart()}
-        {renderMotorOperationsChart()}
-        {renderPowerChart()}
-        {renderActivityTimeline()}
-      </div>
-
-      {/* Raw Data Table */}
-      <div className="raw-data-section">
-        <h3>Recent Data Points ({historicalData.length} total)</h3>
-        <div className="data-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Service</th>
-                <th>Asset</th>
-                <th>Value</th>
-                <th>Unit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historicalData.slice(-10).map((asset, index) => (
-                <tr key={index}>
-                  <td>{parseTimestamp(asset.timestamp).toLocaleTimeString()}</td>
-                  <td className={`service-${asset.service}`}>{asset.service}</td>
-                  <td>{asset.asset_id}</td>
-                  <td>{asset.value}</td>
-                  <td>{asset.unit || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {historicalData.length === 0 && (
-            <div className="no-data-message">No data available for selected time range</div>
-          )}
-        </div>
+        <LineChart 
+          data={chartData.loadChart} 
+          title="Load Over Time" 
+          color="#3498db"
+          width={500}
+          height={250}
+        />
+        
+        <AreaChart 
+          data={chartData.powerChart} 
+          title="Power Consumption" 
+          color="#9b59b6"
+          width={500}
+          height={250}
+        />
+        
+        <LineChart 
+          data={chartData.currentChart} 
+          title="Current Usage" 
+          color="#e74c3c"
+          width={500}
+          height={250}
+        />
+        
+        <BarChart 
+          data={chartData.operationsChart} 
+          title="Hourly Operations" 
+          color="#f39c12"
+          width={500}
+          height={250}
+        />
+        
+        <GaugeChart 
+          value={realTimeData.efficiency || 0}
+          title="Efficiency"
+          color="#27ae60"
+          unit="%"
+        />
       </div>
 
       <style jsx>{`
@@ -492,16 +744,21 @@ const CraneDetails = () => {
           padding: 20px;
           max-width: 1400px;
           margin: 0 auto;
+          background: #f8f9fa;
+        }
+        
+        .page-title {
+          background: white;
+          padding: 20px;
+          border-radius: 10px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
         .page-title h1 {
           color: #2c3e50;
-          margin-bottom: 5px;
-        }
-        
-        .page-title p {
-          color: #7f8c8d;
-          font-size: 16px;
+          margin: 0 0 10px 0;
+          font-size: 28px;
         }
         
         .status-badge {
@@ -513,38 +770,28 @@ const CraneDetails = () => {
         }
         
         .status-active { background: #d4edda; color: #155724; }
-        .status-idle { background: #fff3cd; color: #856404; }
+        .status-loaded { background: #fff3cd; color: #856404; }
+        .status-idle { background: #d1ecf1; color: #0c5460; }
         .status-no.data { background: #f8d7da; color: #721c24; }
         
-        .time-range-selector {
-          margin: 20px 0;
-          padding: 15px;
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .controls-panel {
           display: flex;
+          gap: 20px;
           align-items: center;
-          gap: 15px;
-        }
-        
-        .time-range-selector label {
-          font-weight: 600;
-          color: #2c3e50;
-        }
-        
-        .time-range-selector select {
-          padding: 8px 12px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
+          margin: 20px 0;
+          padding: 20px;
           background: white;
+          border-radius: 10px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
-        .loading-text {
-          color: #3498db;
+        .data-info {
+          margin-left: auto;
+          color: #7f8c8d;
           font-size: 14px;
         }
         
-        .key-metrics-grid {
+        .metrics-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 15px;
@@ -553,10 +800,10 @@ const CraneDetails = () => {
         
         .metric-card {
           background: white;
-          padding: 20px;
-          border-radius: 8px;
+          padding: 25px;
+          border-radius: 10px;
           text-align: center;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
           transition: transform 0.2s ease;
         }
         
@@ -564,229 +811,90 @@ const CraneDetails = () => {
           transform: translateY(-2px);
         }
         
-        .metric-icon {
-          font-size: 24px;
+        .metric-card.large {
+          grid-column: span 2;
+        }
+        
+        .metric-title {
+          color: #7f8c8d;
+          font-size: 14px;
           margin-bottom: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
         
         .metric-value {
-          font-size: 28px;
+          font-size: 32px;
           font-weight: bold;
           color: #2c3e50;
+          margin: 10px 0;
         }
         
-        .metric-label {
-          color: #7f8c8d;
-          font-size: 14px;
-          margin-top: 5px;
+        .metric-subtitle {
+          color: #95a5a6;
+          font-size: 12px;
         }
         
         .charts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
           gap: 20px;
           margin: 30px 0;
         }
         
-        .chart-container {
+        .chart-container, .gauge-container {
           background: white;
           padding: 20px;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border-radius: 10px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
-        .chart-container h4 {
-          margin: 0 0 15px 0;
+        .chart-container h4, .gauge-container h4 {
+          margin: 0 0 20px 0;
           color: #2c3e50;
           border-bottom: 2px solid #ecf0f1;
           padding-bottom: 10px;
         }
         
-        .chart {
-          display: flex;
-          height: 200px;
-          align-items: end;
-          gap: 5px;
-          padding: 10px 0;
-        }
-        
-        .chart-bar-container {
-          flex: 1;
+        .chart-wrapper {
           display: flex;
           flex-direction: column;
           align-items: center;
-          height: 100%;
         }
         
-        .chart-bar {
-          width: 20px;
-          background: #3498db;
-          border-radius: 3px 3px 0 0;
-          transition: height 0.3s ease;
-          min-height: 5px;
+        .x-axis {
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+          margin-top: 10px;
         }
         
-        .chart-label {
+        .x-label {
           font-size: 10px;
-          margin-top: 5px;
           color: #7f8c8d;
           transform: rotate(-45deg);
-          white-space: nowrap;
+          transform-origin: left top;
         }
         
-        .operations-chart {
+        .gauge-wrapper {
           display: flex;
-          height: 200px;
-          align-items: end;
-          gap: 10px;
-          padding: 10px 0;
-        }
-        
-        .operation-bar-container {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          height: 100%;
-        }
-        
-        .operation-bar {
-          width: 40px;
-          border-radius: 5px 5px 0 0;
-          display: flex;
-          align-items: center;
           justify-content: center;
-          position: relative;
-          min-height: 30px;
-        }
-        
-        .operation-count {
-          color: white;
-          font-weight: bold;
-          font-size: 12px;
-        }
-        
-        .operation-label {
-          font-size: 11px;
-          margin-top: 5px;
-          text-align: center;
-          color: #7f8c8d;
-        }
-        
-        .chart-footer {
-          margin-top: 15px;
-          padding-top: 10px;
-          border-top: 1px solid #ecf0f1;
-          font-weight: 600;
-          color: #2c3e50;
-        }
-        
-        .power-chart {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-        
-        .motor-power h5 {
-          margin: 0 0 10px 0;
-          color: #2c3e50;
-          text-transform: capitalize;
-        }
-        
-        .power-bars {
-          display: flex;
-          height: 60px;
-          align-items: end;
-          gap: 3px;
-        }
-        
-        .power-bar-container {
-          flex: 1;
-        }
-        
-        .power-bar {
-          background: #9b59b6;
-          border-radius: 2px 2px 0 0;
-          min-height: 5px;
-        }
-        
-        .activity-timeline {
-          max-height: 300px;
-          overflow-y: auto;
-        }
-        
-        .activity-item {
-          display: flex;
           align-items: center;
-          padding: 10px;
-          border-bottom: 1px solid #ecf0f1;
-          gap: 15px;
+          height: 150px;
         }
         
-        .activity-item:last-child {
-          border-bottom: none;
-        }
-        
-        .activity-time {
-          font-size: 12px;
-          color: #7f8c8d;
-          min-width: 80px;
-        }
-        
-        .activity-type {
-          background: #e3f2fd;
-          color: #1976d2;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-          font-weight: bold;
-          min-width: 80px;
+        .no-data {
           text-align: center;
-        }
-        
-        .activity-description {
-          flex: 1;
-          color: #2c3e50;
-        }
-        
-        .raw-data-section {
-          background: white;
-          padding: 20px;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          margin-top: 30px;
-        }
-        
-        .data-table {
-          overflow-x: auto;
-        }
-        
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        
-        th, td {
-          padding: 12px;
-          text-align: left;
-          border-bottom: 1px solid #ecf0f1;
-        }
-        
-        th {
-          background: #f8f9fa;
-          font-weight: 600;
-          color: #2c3e50;
-        }
-        
-        .service-onboard_io { color: #e74c3c; font-weight: 600; }
-        .service-LoadCell { color: #3498db; font-weight: 600; }
-        .service-modbus { color: #27ae60; font-weight: 600; }
-        
-        .no-data-message {
-          text-align: center;
-          padding: 40px;
+          padding: 60px 20px;
           color: #7f8c8d;
           font-style: italic;
+          background: #f8f9fa;
+          border-radius: 5px;
+        }
+        
+        .loading-text {
+          color: #3498db;
+          font-size: 14px;
         }
         
         @media (max-width: 768px) {
@@ -794,8 +902,17 @@ const CraneDetails = () => {
             grid-template-columns: 1fr;
           }
           
-          .key-metrics-grid {
-            grid-template-columns: repeat(2, 1fr);
+          .metrics-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .metric-card.large {
+            grid-column: span 1;
+          }
+          
+          .controls-panel {
+            flex-direction: column;
+            align-items: stretch;
           }
         }
       `}</style>

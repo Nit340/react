@@ -44,7 +44,7 @@ html, body {
   grid-template-columns: 250px 1fr;
 }
 
-/* Sidebar Styles */
+/* Updated Sidebar Styles */
 .sidebar {
   background-color: var(--dark-color);
   color: white;
@@ -92,12 +92,6 @@ html, body {
   width: 250px;
 }
 
-/* Ensure dropdown icons are always visible */
-.sidebar .dropdown-icon {
-  display: inline-block !important;
-  opacity: 1 !important;
-}
-
 /* Toggle button always visible */
 .sidebar-toggle {
   position: absolute;
@@ -133,15 +127,29 @@ html, body {
   transform: rotate(90deg);
 }
 
-/* Navigation menu */
+/* UPDATED: Navigation menu - removed justify-content: space-between */
 .nav-menu {
   margin-top: 60px;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
-  justify-content: space-between;
+  /* Removed height calculation and space-between */
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 10px 0; /* Added some padding top and bottom */
+}
+
+/* UPDATED: Nav items with tighter spacing */
+.nav-item {
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 4px; /* Reduced gap between items */
+}
+
+.nav-item:last-child {
+  margin-bottom: 0; /* Remove margin from last item */
 }
 
 .nav-link {
@@ -150,7 +158,7 @@ html, body {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 12px 15px;
+  padding: 10px 15px; /* Slightly reduced padding */
   white-space: nowrap;
   transition: all 0.3s ease;
 }
@@ -162,20 +170,54 @@ html, body {
   opacity: 1 !important;
 }
 
-.nav-item {
-  cursor: pointer;
-  transition: all 0.3s;
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
-}
-
 .nav-item:hover {
   background-color: rgba(255,255,255,0.1);
 }
 
 .nav-item.active {
   background-color: var(--primary-color);
+}
+
+/* Custom scrollbar for sidebar */
+.nav-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-menu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Mobile responsive updates */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 0;
+  }
+  
+  .sidebar.expanded {
+    width: 250px;
+    z-index: 1002;
+  }
+  
+  .sidebar-toggle {
+    position: fixed;
+    left: 15px;
+    top: 15px;
+    z-index: 1003;
+  }
+  
+  .nav-menu {
+    margin-top: 70px; /* Slightly increased for mobile */
+  }
 }
 
 /* Dropdown menu styles */

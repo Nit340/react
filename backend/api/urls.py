@@ -14,9 +14,6 @@ urlpatterns = [
     path('api/crane-config', views.get_crane_config_proxy, name='get_crane_config'),
     path('api/crane-config/update', views.update_crane_config_proxy, name='update_crane_config'),
     
-    # ==================== LOAD OPERATIONS ENDPOINT ====================
-    path('api/database/load-operations', views.get_load_operations, name='get_load_operations'),
-    
     # ==================== ONBOARD NOTIFICATION ENDPOINTS ====================
     path('api/onboard-notification', views.receive_onboard_notification, name='receive_onboard_notification'),
     path('api/onboard-notifications', views.get_onboard_notifications, name='get_onboard_notifications'),

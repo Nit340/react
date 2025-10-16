@@ -1,0 +1,32 @@
+services:
+  backend:
+    container_name: ui-backend
+    image: ui-backend:armv7
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm/v7
+    ports:
+      - "8000:8000"
+    networks:
+      - ui-network
+
+  frontend:
+    container_name: ui-frontend
+    image: ui-frontend:armv7
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      platforms:
+        - linux/arm/v7
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - ui-network
+
+networks:
+  ui-network:
+    driver: bridge

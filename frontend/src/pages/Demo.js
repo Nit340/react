@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import DemoMetrics from '../components/Demo/DemoMetrics';
 import DemoControls from '../components/Demo/DemoControls';
-import DataGrid from '../components/Demo/DataGrid';
 import ConnectionStatus from '../components/Demo/ConnectionStatus';
 
 const Demo = () => {
@@ -11,22 +10,22 @@ const Demo = () => {
   const [services, setServices] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [pollingInterval, setPollingInterval] = useState(2000);
+  const [pollingInterval, setPollingInterval] = useState(1000);
   const [apiStatus, setApiStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const ws = useRef(null);
+  const [updateCount, setUpdateCount] = useState(0);
   const pollingRef = useRef(null);
 
-  // Process service-based data structure
+  // Ultra-fast data processing - minimal processing for speed
   const processServiceData = (serviceArray) => {
-    console.log('🔄 Processing service data:', serviceArray);
+    const timestamp = Date.now();
     
     const processedServices = serviceArray.map(service => ({
       name: service.name,
       assets: service.assets.map(asset => ({
         id: asset.id,
         value: asset.value,
-        timestamp: asset.timestamp
+        timestamp: asset.timestamp || timestamp
       }))
     }));
 
@@ -34,69 +33,74 @@ const Demo = () => {
     
     // Create flat structure for legacy components
     const flatData = {};
-    
-    // Map service assets to flat data structure
     serviceArray.forEach(service => {
       service.assets.forEach(asset => {
         flatData[asset.id] = asset.value;
       });
     });
 
-    // Add timestamp and source
-    flatData.timestamp = serviceArray[0]?.assets[0]?.timestamp || new Date().toISOString();
-    flatData.source = 'service_data';
-    
-    console.log('✅ Processed services:', processedServices);
-    console.log('✅ Flat data:', flatData);
+    flatData.timestamp = timestamp;
+    flatData.source = 'realtime';
+    flatData.updateCount = updateCount + 1;
     
     setData(flatData);
+    setUpdateCount(prev => prev + 1);
+    
     return { services: processedServices, flatData };
   };
 
-  // Enhanced polling function
-  const fetchData = async () => {
+  // Ultra-fast polling function - uses your existing endpoint
+  const fetchRealtimeData = async () => {
     if (isLoading) return;
     
     setIsLoading(true);
     
     try {
-      console.log('🔄 Polling: Fetching data from /api/iot-data...');
-      const response = await fetch('/api/iot-data');
+      // Use your existing endpoint with cache prevention
+      const response = await fetch('/api/iot-data', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Full API Response:', result);
         
         if (result.success && result.data) {
-          // Handle the nested service data structure
+          // Handle service-based data format
           if (result.data.services && Array.isArray(result.data.services)) {
-            // New service format with nested services array
-            const processed = processServiceData(result.data.services);
-            setApiStatus(`Service Data - ${result.data.total_services} services, ${result.data.total_assets} assets`);
+            processServiceData(result.data.services);
+            setApiStatus(`Real-time - ${result.data.services.length} services`);
           } else if (Array.isArray(result.data)) {
-            // Direct array of services
-            const processed = processServiceData(result.data);
-            setApiStatus(`Service Data - ${processed.services.length} services`);
+            processServiceData(result.data);
+            setApiStatus(`Real-time - ${result.data.length} services`);
           } else {
-            // Old flat format
-            console.log('⚠️ Using old flat data format');
-            setData(result.data);
-            setApiStatus(`Legacy Data - Source: ${result.source}`);
+            // Direct data assignment for maximum speed
+            setData(prev => ({
+              ...result.data,
+              timestamp: Date.now(),
+              source: 'direct_realtime',
+              updateCount: updateCount + 1
+            }));
+            setUpdateCount(prev => prev + 1);
+            setApiStatus('Direct Real-time Data');
           }
+          
           setLastUpdate(new Date());
           setIsConnected(true);
         } else {
-          console.error('API returned unsuccessful response:', result);
-          setApiStatus('Error: API returned unsuccessful response');
+          setApiStatus('No real-time data available');
           setIsConnected(false);
         }
       } else {
-        console.error('HTTP error:', response.status);
         setApiStatus(`HTTP Error: ${response.status}`);
         setIsConnected(false);
       }
     } catch (error) {
-      console.error('Polling Error:', error);
+      console.error('Real-time fetch error:', error);
       setApiStatus(`Connection Error: ${error.message}`);
       setIsConnected(false);
     } finally {
@@ -104,26 +108,16 @@ const Demo = () => {
     }
   };
 
-  // WebSocket connection
-  const connectWebSocket = () => {
-    try {
-      setApiStatus('Connecting to WebSocket...');
-      
-      // Simulate WebSocket with rapid polling for service data
-      console.log('🔄 Using simulated WebSocket mode');
-      
-      setIsConnected(true);
-      setApiStatus('Simulated WebSocket - Service Data');
-      
-      fetchData(); // Initial fetch
-      pollingRef.current = setInterval(fetchData, 500);
-      
-    } catch (error) {
-      console.error('WebSocket setup error:', error);
-      setIsConnected(false);
-      setApiStatus('WebSocket setup error - Falling back to polling');
-      setMode('polling');
-    }
+  // Real-time mode using very fast polling
+  const startRealtimeMode = () => {
+    console.log('🚀 Starting real-time mode (fast polling)');
+    setApiStatus('Real-time mode - Fast updates');
+    
+    // Initial fetch
+    fetchRealtimeData();
+    
+    // Fast polling for real-time feel
+    pollingRef.current = setInterval(fetchRealtimeData, 300); // 300ms for real-time
   };
 
   // Method switching effect
@@ -131,30 +125,27 @@ const Demo = () => {
     console.log(`🔄 Switching to ${mode} mode`);
     
     // Cleanup previous connections
-    if (ws.current) {
-      ws.current.close();
-      ws.current = null;
-    }
-    
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
 
     setIsConnected(false);
-    setApiStatus(`Initializing ${mode} mode...`);
+    setUpdateCount(0);
 
     if (mode === 'polling') {
-      fetchData();
-      pollingRef.current = setInterval(fetchData, pollingInterval);
-      setApiStatus(`Polling active - ${pollingInterval/1000}s interval`);
+      setApiStatus(`Polling - ${pollingInterval}ms interval`);
+      fetchRealtimeData(); // Initial fetch
+      pollingRef.current = setInterval(fetchRealtimeData, pollingInterval);
     } else if (mode === 'realtime') {
-      connectWebSocket();
+      startRealtimeMode();
     }
 
     return () => {
-      if (ws.current) ws.current.close();
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     };
   }, [mode, pollingInterval]);
 
@@ -163,24 +154,58 @@ const Demo = () => {
     setMode(newMode);
   };
 
-  // Handle interval change
+  // Handle interval change - with faster options for real-time
   const handleIntervalChange = (interval) => {
     setPollingInterval(interval);
   };
 
   // Manual refresh
   const handleManualRefresh = () => {
-    if (mode === 'polling') {
-      setApiStatus('Manual refresh...');
-      fetchData();
-    }
+    setApiStatus('Manual refresh...');
+    fetchRealtimeData();
+  };
+
+  // Simulate data for testing if no API available
+  const simulateRealtimeData = () => {
+    const mockServices = [
+      {
+        name: 'onboardio',
+        assets: [
+          { id: 'IN0', value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
+          { id: 'IN1', value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
+          { id: 'OUT0', value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
+          { id: 'OUT1', value: Math.random() > 0.5 ? 1 : 0, timestamp: new Date().toISOString() },
+        ]
+      },
+      {
+        name: 'loadcell',
+        assets: [
+          { id: 'Load', value: Math.floor(Math.random() * 1000), timestamp: new Date().toISOString() },
+          { id: 'Weight', value: Math.floor(Math.random() * 500), timestamp: new Date().toISOString() },
+        ]
+      },
+      {
+        name: 'modbus',
+        assets: [
+          { id: 'Voltage', value: (Math.random() * 50 + 200).toFixed(1), timestamp: new Date().toISOString() },
+          { id: 'Current', value: (Math.random() * 10 + 5).toFixed(1), timestamp: new Date().toISOString() },
+        ]
+      }
+    ];
+    
+    processServiceData(mockServices);
+    setApiStatus('Simulated Real-time Data');
+    setLastUpdate(new Date());
+    setIsConnected(true);
   };
 
   return (
     <>
       <div className="page-title">
-        <h1>Real-time monitoring </h1>
-      
+        <h1>Real-time Monitoring</h1>
+        <div className="update-counter">
+          Mode: {mode}
+        </div>
       </div>
 
       <ConnectionStatus 
@@ -197,11 +222,22 @@ const Demo = () => {
         pollingInterval={pollingInterval}
         onModeChange={handleModeChange}
         onIntervalChange={handleIntervalChange}
+        onSimulateData={simulateRealtimeData}
       />
 
       {/* Service-based Data Display */}
       <div className="services-container">
-        <h3>Service Data ({services.length} services)</h3>
+        <div className="services-header">
+          <h3>Service Data ({services.length} services)</h3>
+          <div className="data-freshness">
+            Last update: {lastUpdate ? lastUpdate.toLocaleTimeString() : 'Never'}
+            {lastUpdate && (
+              <span className="update-age">
+                ({Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago)
+              </span>
+            )}
+          </div>
+        </div>
         <div className="services-grid">
           {services.map(service => (
             <div key={service.name} className="service-card">
@@ -223,22 +259,62 @@ const Demo = () => {
             </div>
           ))}
           {services.length === 0 && !isLoading && (
-            <div className="no-data">No service data available</div>
+            <div className="no-data">
+              No service data available
+              <button onClick={simulateRealtimeData} className="simulate-btn">
+                Simulate Data
+              </button>
+            </div>
           )}
         </div>
       </div>
 
+      {/* Only DemoMetrics remains - DataGrid has been removed */}
       <DemoMetrics data={data} services={services} isLoading={isLoading} />
 
-      <DataGrid data={data} services={services} isLoading={isLoading} />
-
       <style jsx>{`
+        .page-title {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+        
+        .update-counter {
+          background: #e3f2fd;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 14px;
+          color: #1976d2;
+          font-weight: 600;
+        }
+        
         .services-container {
           margin: 20px 0;
           background: white;
           border-radius: 8px;
           padding: 20px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .services-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 15px;
+        }
+        
+        .data-freshness {
+          font-size: 14px;
+          color: #6c757d;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+        }
+        
+        .update-age {
+          font-size: 12px;
+          color: #adb5bd;
         }
         
         .services-grid {
@@ -253,6 +329,12 @@ const Demo = () => {
           border-radius: 8px;
           padding: 15px;
           background: #f8f9fa;
+          transition: all 0.3s ease;
+        }
+        
+        .service-card:hover {
+          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+          transform: translateY(-2px);
         }
         
         .service-header {
@@ -290,6 +372,11 @@ const Demo = () => {
           border-radius: 6px;
           text-align: center;
           background: white;
+          transition: background-color 0.2s ease;
+        }
+        
+        .asset-item:hover {
+          background: #f8f9fa;
         }
         
         .asset-id {
@@ -317,6 +404,24 @@ const Demo = () => {
           padding: 40px;
           color: #6c757d;
           font-style: italic;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 15px;
+        }
+        
+        .simulate-btn {
+          background: #28a745;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+        
+        .simulate-btn:hover {
+          background: #218838;
         }
       `}</style>
     </>

@@ -228,12 +228,35 @@ class ValueRangeFilter(admin.SimpleListFilter):
             return queryset.filter(timestamp__lt=one_hour_ago)
 
 
+class OperationCountFilter(admin.SimpleListFilter):
+    """Custom filter for operation counts"""
+    title = 'operation activity'
+    parameter_name = 'operation_activity'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('has_operations', 'Has Operations'),
+            ('no_operations', 'No Operations'),
+            ('frequent_operations', 'Frequent Operations (100+ total)'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'has_operations':
+            return queryset.filter(total_operation_count__gt=0)
+        if self.value() == 'no_operations':
+            return queryset.filter(total_operation_count=0)
+        if self.value() == 'frequent_operations':
+            return queryset.filter(total_operation_count__gte=100)
+
+
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ['asset_id', 'service_with_crane', 'get_display_value_colored', 'value_type_badge', 'timestamp_recent', 'is_active']
-    list_filter = ['service__crane', 'service', 'value_type', 'is_active', 'timestamp', ValueRangeFilter]
+    list_display = ['asset_id', 'service_with_crane', 'get_display_value_colored', 'value_type_badge', 
+                   'operation_summary', 'timestamp_recent', 'is_active']
+    list_filter = ['service__crane', 'service', 'value_type', 'is_active', 'timestamp', 
+                  ValueRangeFilter, OperationCountFilter]
     search_fields = ['asset_id', 'service__name', 'service__crane__name']
-    readonly_fields = ['created_at', 'get_display_value']
+    readonly_fields = ['created_at', 'get_display_value', 'get_operation_summary_display']
     list_editable = ['is_active']
     date_hierarchy = 'timestamp'
     list_per_page = 50
@@ -242,6 +265,23 @@ class AssetAdmin(admin.ModelAdmin):
     fieldsets = [
         ('Basic Information', {
             'fields': ['service', 'asset_id', 'value', 'get_display_value', 'value_type', 'unit', 'is_active']
+        }),
+        ('Operation Counters', {
+            'fields': ['get_operation_summary_display'],
+            'classes': ['collapse']
+        }),
+        ('Detailed Operation Counters', {
+            'fields': [
+                'start_count', 'hoist_up_count', 'hoist_down_count',
+                'ct_forward_count', 'ct_backward_count', 
+                'lt_forward_count', 'lt_backward_count',
+                'total_operation_count', 'total_operation_duration'
+            ],
+            'classes': ['collapse']
+        }),
+        ('Operation Timing', {
+            'fields': ['last_operation_start', 'last_operation_end'],
+            'classes': ['collapse']
         }),
         ('Digital States (for digital values only)', {
             'fields': ['state_0_name', 'state_1_name'],
@@ -294,6 +334,46 @@ class AssetAdmin(admin.ModelAdmin):
             color, obj.get_value_type_display()
         )
     value_type_badge.short_description = 'Type'
+
+    def operation_summary(self, obj):
+        """Display operation summary in list view"""
+        if obj.total_operation_count > 0:
+            # Show total operations and duration
+            hours = obj.total_operation_duration / 3600
+            return format_html(
+                '<div style="font-size: 0.8em;">'
+                '<strong>{} ops</strong><br>'
+                '<span style="color: gray">{:.1f}h</span>'
+                '</div>',
+                obj.total_operation_count,
+                hours
+            )
+        return format_html('<span style="color: gray">No ops</span>')
+    operation_summary.short_description = 'Operations'
+
+    def get_operation_summary_display(self, obj):
+        """Display detailed operation summary in edit view"""
+        summary = obj.get_operation_summary()
+        return format_html(
+            '<div style="background: #f8f9fa; padding: 10px; border-radius: 5px;">'
+            '<h4>Operation Summary</h4>'
+            '<table style="width: 100%; border-collapse: collapse;">'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>Start:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{start_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>Hoist Up:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{hoist_up_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>Hoist Down:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{hoist_down_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>CT Forward:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{ct_forward_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>CT Backward:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{ct_backward_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>LT Forward:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{lt_forward_count}</td></tr>'
+            '<tr><td style="padding: 4px; border-bottom: 1px solid #dee2e6;"><strong>LT Backward:</strong></td><td style="padding: 4px; border-bottom: 1px solid #dee2e6;">{lt_backward_count}</td></tr>'
+            '<tr style="background: #e9ecef;">'
+            '<td style="padding: 4px;"><strong>Total Operations:</strong></td><td style="padding: 4px;"><strong>{total_operation_count}</strong></td></tr>'
+            '<tr style="background: #e9ecef;">'
+            '<td style="padding: 4px;"><strong>Total Duration:</strong></td><td style="padding: 4px;"><strong>{total_operation_duration:.1f} sec</strong></td></tr>'
+            '</table>'
+            '</div>',
+            **summary
+        )
+    get_operation_summary_display.short_description = 'Operation Summary'
 
     def timestamp_recent(self, obj):
         from django.utils import timezone
@@ -533,5 +613,24 @@ def disable_alerts(modeladmin, request, queryset):
     modeladmin.message_user(request, f'Alerts disabled for {updated} configurations.')
 disable_alerts.short_description = "🔕 Disable alerts for selected"
 
+def reset_operation_counters(modeladmin, request, queryset):
+    """Admin action to reset operation counters"""
+    updated = queryset.update(
+        start_count=0,
+        hoist_up_count=0,
+        hoist_down_count=0,
+        ct_forward_count=0,
+        ct_backward_count=0,
+        lt_forward_count=0,
+        lt_backward_count=0,
+        total_operation_count=0,
+        total_operation_duration=0,
+        last_operation_start=None,
+        last_operation_end=None
+    )
+    modeladmin.message_user(request, f'Operation counters reset for {updated} assets.')
+reset_operation_counters.short_description = "🔄 Reset operation counters"
+
 ServiceAdmin.actions = [enable_services, disable_services]
 ServiceConfigurationAdmin.actions = [enable_alerts, disable_alerts]
+AssetAdmin.actions = [reset_operation_counters]

@@ -20,9 +20,8 @@ iot_data_store = {
 }
 
 # ==================== DATABASE STORAGE FUNCTIONS ====================
-
 def save_to_database_async(services_data):
-    """Save IoT data to database in a separate thread"""
+    """Save IoT data to database in a separate thread - DEBUG VERSION"""
     def save_data():
         try:
             with transaction.atomic():
@@ -35,12 +34,17 @@ def save_to_database_async(services_data):
                 total_assets_processed = 0
                 total_services_processed = 0
                 
+                print(f"🔄 Processing {len(services_data)} services...")
+                
                 for service_data in services_data:
                     if 'name' in service_data and 'assets' in service_data:
+                        service_name = service_data['name']
+                        print(f"🔧 Processing service: {service_name}")
+                        
                         # Get or create service under the default crane
                         service, created = Service.objects.get_or_create(
                             crane=crane,
-                            name=service_data['name'],
+                            name=service_name,
                             defaults={
                                 'service_type': service_data.get('name', 'other')
                             }
@@ -49,35 +53,177 @@ def save_to_database_async(services_data):
                         
                         for asset_data in service_data['assets']:
                             if 'id' in asset_data and 'value' in asset_data:
+                                asset_id = asset_data['id']
+                                asset_value = asset_data['value']
+                                
                                 # Parse timestamp
                                 timestamp_str = asset_data.get('timestamp', datetime.now().isoformat() + 'Z')
                                 try:
-                                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                                except:
+                                    if timestamp_str.endswith('Z'):
+                                        timestamp_str = timestamp_str[:-1] + '+00:00'
+                                    timestamp = datetime.fromisoformat(timestamp_str)
+                                except Exception as e:
+                                    print(f"⚠️ Timestamp parsing error: {e}, using current time")
                                     timestamp = datetime.now()
+                                
+                                print(f"📊 Asset: {asset_id} = {asset_value} at {timestamp}")
+                                
+                                # Get existing asset to check for value changes
+                                existing_asset = Asset.objects.filter(
+                                    service=service,
+                                    asset_id=asset_id
+                                ).first()
+                                
+                                if existing_asset:
+                                    print(f"📁 Existing asset found: {asset_id}, value_type: {existing_asset.value_type}")
+                                
+                                # Prepare update data
+                                update_data = {
+                                    'value': asset_value,
+                                    'timestamp': timestamp,
+                                }
+                                
+                                # Check if this is a digital input
+                                if existing_asset and existing_asset.value_type == 'digital':
+                                    old_value = existing_asset.value
+                                    new_value = asset_value
+                                    
+                                    print(f"🔍 Digital asset: {asset_id}, old: {old_value}, new: {new_value}")
+                                    
+                                    # Operation detected: 0 → 1 transition
+                                    if old_value == 0 and new_value == 1:
+                                        print(f"🚨 OPERATION TRIGGERED: {asset_id} changed from {old_value}→{new_value}")
+                                        
+                                        # EXACT MATCHING FOR ALL OPERATION TYPES
+                                        if asset_id == 'Hoist_Up':
+                                            update_data['hoist_up_count'] = existing_asset.hoist_up_count + 1
+                                            print(f"✅ COUNTED: Hoist_Up → hoist_up_count = {update_data['hoist_up_count']}")
+                                        
+                                        elif asset_id == 'Hoist_Down':
+                                            update_data['hoist_down_count'] = existing_asset.hoist_down_count + 1
+                                            print(f"✅ COUNTED: Hoist_Down → hoist_down_count = {update_data['hoist_down_count']}")
+                                        
+                                        elif asset_id == 'Ct_Left':
+                                            update_data['ct_forward_count'] = existing_asset.ct_forward_count + 1
+                                            print(f"✅ COUNTED: Ct_Left → ct_forward_count = {update_data['ct_forward_count']}")
+                                        
+                                        elif asset_id == 'Ct_Right':
+                                            update_data['ct_backward_count'] = existing_asset.ct_backward_count + 1
+                                            print(f"✅ COUNTED: Ct_Right → ct_backward_count = {update_data['ct_backward_count']}")
+                                        
+                                        elif asset_id == 'Lt_Forward':
+                                            update_data['lt_forward_count'] = existing_asset.lt_forward_count + 1
+                                            print(f"✅ COUNTED: Lt_Forward → lt_forward_count = {update_data['lt_forward_count']}")
+                                        
+                                        elif asset_id == 'Lt_Reverse':
+                                            update_data['lt_backward_count'] = existing_asset.lt_backward_count + 1
+                                            print(f"✅ COUNTED: Lt_Reverse → lt_backward_count = {update_data['lt_backward_count']}")
+                                        
+                                        elif asset_id == 'Start':
+                                            update_data['start_count'] = existing_asset.start_count + 1
+                                            print(f"ℹ️ COUNTED: Start → start_count = {update_data['start_count']}")
+                                        
+                                        else:
+                                            print(f"❌ UNKNOWN OPERATION: {asset_id} - NOT COUNTED!")
+                                    
+                                    # Operation ended: 1 → 0 transition  
+                                    elif old_value == 1 and new_value == 0:
+                                        print(f"🔚 OPERATION ENDED: {asset_id} changed from {old_value}→{new_value}")
+                                        update_data['last_operation_end'] = timestamp
                                 
                                 # Create or update asset
                                 asset, asset_created = Asset.objects.update_or_create(
                                     service=service,
-                                    asset_id=asset_data['id'],
-                                    defaults={
-                                        'value': asset_data['value'],
-                                        'timestamp': timestamp,
-                                    }
+                                    asset_id=asset_id,
+                                    defaults=update_data
                                 )
+                                
+                                # Update total operation count for MOVEMENT operations only
+                                if not asset_created:
+                                    total_movement_ops = (
+                                        asset.hoist_up_count + 
+                                        asset.hoist_down_count +
+                                        asset.ct_forward_count + 
+                                        asset.ct_backward_count +
+                                        asset.lt_forward_count + 
+                                        asset.lt_backward_count
+                                    )
+                                    
+                                    if asset.total_operation_count != total_movement_ops:
+                                        asset.total_operation_count = total_movement_ops
+                                        asset.save()
+                                        print(f"🔢 TOTAL OPERATIONS: {asset.total_operation_count}")
                                 
                                 total_assets_processed += 1
                 
-                print(f"💾 Database: Saved {total_services_processed} services with {total_assets_processed} assets under crane '{crane.name}'")
+                print(f"💾 COMPLETED: Saved {total_services_processed} services with {total_assets_processed} assets")
                 
         except Exception as e:
             print(f"❌ Database save error: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Start the database save in a separate thread
     thread = threading.Thread(target=save_data)
     thread.daemon = True
     thread.start()
-
+    
+def update_operation_counters(self, old_value, new_value):
+    """Update operation counters when digital input changes from 0→1 - FIXED VERSION"""
+    if old_value == 0 and new_value == 1:
+        asset_id = self.asset_id  # Use original case
+        
+        print(f"🎯 Asset model: Operation detected: {asset_id} changed from {old_value}→{new_value}")
+        
+        # EXACT MATCHING - same as in views.py
+        if asset_id == 'Hoist_Up':
+            self.hoist_up_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented hoist_up_count to {self.hoist_up_count}")
+        elif asset_id == 'Hoist_Down':
+            self.hoist_down_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented hoist_down_count to {self.hoist_down_count}")
+        elif asset_id == 'Ct_Left':
+            self.ct_forward_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented ct_forward_count to {self.ct_forward_count}")
+        elif asset_id == 'Ct_Right':
+            self.ct_backward_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented ct_backward_count to {self.ct_backward_count}")
+        elif asset_id == 'Lt_Forward':
+            self.lt_forward_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented lt_forward_count to {self.lt_forward_count}")
+        elif asset_id == 'Lt_Reverse':
+            self.lt_backward_count += 1
+            self.last_operation_start = self.timestamp
+            print(f"📈 Asset model: Incremented lt_backward_count to {self.lt_backward_count}")
+        elif asset_id == 'Start':
+            self.start_count += 1
+            print(f"ℹ️ Asset model: Start operation detected: start_count = {self.start_count}")
+        else:
+            print(f"❓ Asset model: Unknown operation type: {asset_id}")
+        
+        # Update total operation count (movement operations only)
+        self.total_operation_count = (
+            self.hoist_up_count + self.hoist_down_count +
+            self.ct_forward_count + self.ct_backward_count +
+            self.lt_forward_count + self.lt_backward_count
+        )
+        print(f"🔢 Asset model: Updated total_operation_count to {self.total_operation_count}")
+    
+    # Update operation end time when signal goes from 1→0
+    elif old_value == 1 and new_value == 0:
+        self.last_operation_end = self.timestamp
+        print(f"⏰ Asset model: Set last_operation_end to {self.timestamp}")
+        # Calculate duration and add to total
+        if self.last_operation_start and self.last_operation_end:
+            duration = (self.last_operation_end - self.last_operation_start).total_seconds()
+            if duration > 0:
+                self.total_operation_duration += duration
+                print(f"⏱️ Asset model: Added {duration:.2f}s to total_operation_duration: {self.total_operation_duration:.2f}")
 # ==================== SERVICE-BASED DATA PROCESSING ====================
 
 @require_http_methods(["GET"])
@@ -203,8 +349,10 @@ def process_service_based_data(external_data):
 
 @require_http_methods(["GET"])
 def get_database_services(request):
-    """Get services from database"""
+    """Get LATEST services data from database - optimized version"""
     try:
+        from django.db.models import Max, Subquery, OuterRef
+        
         # Get default crane
         crane = Crane.objects.filter(name="Crane").first()
         if not crane:
@@ -214,25 +362,70 @@ def get_database_services(request):
                 "timestamp": datetime.now().isoformat() + 'Z'
             }, status=404)
         
-        services = Service.objects.filter(crane=crane).prefetch_related('assets')
+        services = Service.objects.filter(crane=crane)
         service_data = []
         
         for service in services:
-            assets = []
-            for asset in service.assets.all()[:20]:  # Limit assets for performance
-                assets.append({
-                    'id': asset.asset_id,
-                    'value': asset.value,
-                    'timestamp': asset.timestamp.isoformat() + 'Z',
-                    'value_type': asset.value_type,
-                    'unit': asset.unit
-                })
+            # Get the latest timestamp for each asset in this service
+            latest_timestamps = Asset.objects.filter(
+                service=service
+            ).values('asset_id').annotate(
+                latest_timestamp=Max('timestamp')
+            )
+            
+            # Get assets with their latest values
+            latest_assets = []
+            operation_counters = {}
+            
+            for item in latest_timestamps:
+                latest_asset = Asset.objects.filter(
+                    service=service,
+                    asset_id=item['asset_id'],
+                    timestamp=item['latest_timestamp']
+                ).first()
+                
+                if latest_asset:
+                    # Add regular asset data
+                    latest_assets.append({
+                        'id': latest_asset.asset_id,
+                        'value': latest_asset.value,
+                        'timestamp': latest_asset.timestamp.isoformat() + 'Z',
+                        'value_type': latest_asset.value_type,
+                        'unit': latest_asset.unit
+                    })
+                    
+                    # Collect operation counters from this asset
+                    if latest_asset.total_operation_count > 0 or any([
+                        latest_asset.start_count,
+                        latest_asset.hoist_up_count,
+                        latest_asset.hoist_down_count,
+                        latest_asset.ct_forward_count,
+                        latest_asset.ct_backward_count,
+                        latest_asset.lt_forward_count,
+                        latest_asset.lt_backward_count
+                    ]):
+                        operation_counters = {
+                            'start_count': latest_asset.start_count,
+                            'hoist_up_count': latest_asset.hoist_up_count,
+                            'hoist_down_count': latest_asset.hoist_down_count,
+                            'ct_forward_count': latest_asset.ct_forward_count,
+                            'ct_backward_count': latest_asset.ct_backward_count,
+                            'lt_forward_count': latest_asset.lt_forward_count,
+                            'lt_backward_count': latest_asset.lt_backward_count,
+                            'total_operation_count': latest_asset.total_operation_count,
+                            'total_operation_duration': latest_asset.total_operation_duration,
+                            'last_operation_start': latest_asset.last_operation_start.isoformat() + 'Z' if latest_asset.last_operation_start else None,
+                            'last_operation_end': latest_asset.last_operation_end.isoformat() + 'Z' if latest_asset.last_operation_end else None
+                        }
             
             service_data.append({
                 'name': service.name,
-                'assets': assets,
-                'total_assets': service.assets.count()
+                'assets': latest_assets,
+                'total_assets': len(latest_assets),
+                'operation_counters': operation_counters
             })
+        
+        print(f"📊 Database: Returning {len(service_data)} services with {sum(len(s['assets']) for s in service_data)} latest assets")
         
         return JsonResponse({
             "success": True,

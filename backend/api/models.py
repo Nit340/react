@@ -142,6 +142,23 @@ class Asset(models.Model):
     state_0_name = models.CharField(max_length=50, blank=True, default='Off', help_text="Name for state 0")
     state_1_name = models.CharField(max_length=50, blank=True, default='On', help_text="Name for state 1")
 
+    # ==================== OPERATION COUNTERS ====================
+    start_count = models.PositiveIntegerField(default=0, help_text="Number of start operations")
+    hoist_up_count = models.PositiveIntegerField(default=0, help_text="Number of hoist up operations")
+    hoist_down_count = models.PositiveIntegerField(default=0, help_text="Number of hoist down operations")
+    ct_forward_count = models.PositiveIntegerField(default=0, help_text="Number of CT forward movements")
+    ct_backward_count = models.PositiveIntegerField(default=0, help_text="Number of CT backward movements")
+    lt_forward_count = models.PositiveIntegerField(default=0, help_text="Number of LT forward movements")
+    lt_backward_count = models.PositiveIntegerField(default=0, help_text="Number of LT backward movements")
+    
+    # ==================== TOTAL OPERATIONS & DURATION ====================
+    total_operation_count = models.PositiveIntegerField(default=0, help_text="Total number of all operations")
+    total_operation_duration = models.FloatField(default=0.0, help_text="Total duration of all operations in seconds")
+    
+    # ==================== OPERATION TIMING ====================
+    last_operation_start = models.DateTimeField(null=True, blank=True, help_text="Timestamp when last operation started")
+    last_operation_end = models.DateTimeField(null=True, blank=True, help_text="Timestamp when last operation ended")
+
     class Meta:
         db_table = 'iot_assets'
         ordering = ['service', 'asset_id']
@@ -151,6 +168,11 @@ class Asset(models.Model):
             models.Index(fields=['value_type']),
             models.Index(fields=['is_active', 'timestamp']),
             models.Index(fields=['service', 'timestamp']),
+            # Indexes for operation counters
+            models.Index(fields=['start_count']),
+            models.Index(fields=['hoist_up_count']),
+            models.Index(fields=['hoist_down_count']),
+            models.Index(fields=['total_operation_count']),
         ]
         verbose_name = 'Asset'
         verbose_name_plural = 'Assets'
@@ -166,6 +188,15 @@ class Asset(models.Model):
         if not self.unit:
             self.unit = self.detect_unit()
             
+        # Auto-detect operation type and update counters if this is a digital input change
+        if self.value_type == 'digital' and hasattr(self, 'pk'):
+            try:
+                old_asset = Asset.objects.get(pk=self.pk)
+                if old_asset.value != self.value:
+                    self.update_operation_counters(old_asset.value, self.value)
+            except Asset.DoesNotExist:
+                pass
+                
         super().save(*args, **kwargs)
 
     def detect_value_type(self):
@@ -206,6 +237,50 @@ class Asset(models.Model):
         
         return ''
 
+    def update_operation_counters(self, old_value, new_value):
+        """Update operation counters when digital input changes from 0→1"""
+        if old_value == 0 and new_value == 1:
+            asset_id_lower = self.asset_id.lower()
+            
+            # Detect operation type and increment appropriate counter
+            if 'start' in asset_id_lower:
+                self.start_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'hoist_up' in asset_id_lower or 'up' in asset_id_lower:
+                self.hoist_up_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'hoist_down' in asset_id_lower or 'down' in asset_id_lower:
+                self.hoist_down_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'ct_forward' in asset_id_lower or 'ct_fwd' in asset_id_lower:
+                self.ct_forward_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'ct_backward' in asset_id_lower or 'ct_bwd' in asset_id_lower:
+                self.ct_backward_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'lt_forward' in asset_id_lower or 'lt_fwd' in asset_id_lower:
+                self.lt_forward_count += 1
+                self.last_operation_start = self.timestamp
+            elif 'lt_backward' in asset_id_lower or 'lt_bwd' in asset_id_lower:
+                self.lt_backward_count += 1
+                self.last_operation_start = self.timestamp
+            
+            # Update total operation count
+            self.total_operation_count = (
+                self.start_count + self.hoist_up_count + self.hoist_down_count +
+                self.ct_forward_count + self.ct_backward_count +
+                self.lt_forward_count + self.lt_backward_count
+            )
+        
+        # Update operation end time when signal goes from 1→0
+        elif old_value == 1 and new_value == 0:
+            self.last_operation_end = self.timestamp
+            # Calculate duration and add to total
+            if self.last_operation_start and self.last_operation_end:
+                duration = (self.last_operation_end - self.last_operation_start).total_seconds()
+                if duration > 0:
+                    self.total_operation_duration += duration
+
     def get_display_value(self):
         """Get formatted value for display"""
         if self.value_type == 'digital':
@@ -221,6 +296,20 @@ class Asset(models.Model):
                 formatted_value = f"{self.value:.2f}"
                 
             return f"{formatted_value} {self.unit}".strip()
+    
+    def get_operation_summary(self):
+        """Get summary of all operation counts"""
+        return {
+            'start_count': self.start_count,
+            'hoist_up_count': self.hoist_up_count,
+            'hoist_down_count': self.hoist_down_count,
+            'ct_forward_count': self.ct_forward_count,
+            'ct_backward_count': self.ct_backward_count,
+            'lt_forward_count': self.lt_forward_count,
+            'lt_backward_count': self.lt_backward_count,
+            'total_operation_count': self.total_operation_count,
+            'total_operation_duration': self.total_operation_duration,
+        }
     
     def is_value_normal(self):
         """Check if value is within normal ranges"""

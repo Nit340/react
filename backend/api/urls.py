@@ -7,8 +7,10 @@ urlpatterns = [
     path('api/iot-data/receive', views.receive_iot_data, name='receive_iot_data'),
     
     # ==================== DATABASE QUERY ENDPOINTS ====================
-    path('api/database/services', views.get_database_services, name='get_database_services'),
-    # REMOVED: path('api/database/assets', views.get_database_assets, name='get_database_assets'),
+# ==================== DATABASE QUERY ENDPOINTS ====================
+path('api/database/services', views.get_database_services, name='get_database_services'),
+# REMOVED: path('api/database/assets', views.get_database_assets, name='get_database_assets'),
+
     
     # ==================== CONFIGURATION ENDPOINTS ====================
     path('api/crane-config', views.get_crane_config_proxy, name='get_crane_config'),

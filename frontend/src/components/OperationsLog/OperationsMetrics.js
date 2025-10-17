@@ -74,25 +74,9 @@ const OperationsMetrics = ({ metrics }) => {
         <div className="metric-value">{metrics.switch}</div>
       </div>
       
-      <div className="metric-card">
-        <div className="metric-header">
-          <div className="metric-icon icon-duration">
-            <i className="fas fa-clock"></i>
-          </div>
-          <div className="metric-title">DURATION</div>
-        </div>
-        <div className="metric-value">{metrics.duration}</div>
-      </div>
+  
       
-      <div className="metric-card">
-        <div className="metric-header">
-          <div className="metric-icon icon-load">
-            <i className="fas fa-weight-hanging"></i>
-          </div>
-          <div className="metric-title">LOAD</div>
-        </div>
-        <div className="metric-value">{metrics.load}</div>
-      </div>
+      
     </div>
   );
 };

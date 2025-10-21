@@ -7,10 +7,10 @@ urlpatterns = [
     path('api/iot-data/receive', views.receive_iot_data, name='receive_iot_data'),
     
     # ==================== DATABASE QUERY ENDPOINTS ====================
-# ==================== DATABASE QUERY ENDPOINTS ====================
-path('api/database/services', views.get_database_services, name='get_database_services'),
-# REMOVED: path('api/database/assets', views.get_database_assets, name='get_database_assets'),
-
+    path('api/database/services', views.get_database_services, name='get_database_services'),
+    
+    # ==================== DEBUG ENDPOINTS ====================
+    path('api/debug/operations', views.debug_operation_counters, name='debug_operations'),
     
     # ==================== CONFIGURATION ENDPOINTS ====================
     path('api/crane-config', views.get_crane_config_proxy, name='get_crane_config'),
@@ -19,4 +19,4 @@ path('api/database/services', views.get_database_services, name='get_database_se
     # ==================== ONBOARD NOTIFICATION ENDPOINTS ====================
     path('api/onboard-notification', views.receive_onboard_notification, name='receive_onboard_notification'),
     path('api/onboard-notifications', views.get_onboard_notifications, name='get_onboard_notifications'),
-]  
+]

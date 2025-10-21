@@ -105,6 +105,10 @@ class Service(models.Model):
             return 'stale'
         else:
             return 'outdated'
+    
+    def is_io_service(self):
+        """Check if this is an IO service that needs operation counters"""
+        return self.service_type == 'io'
 
 class Asset(models.Model):
     """Represents an asset (datapoint) within a service"""
@@ -143,6 +147,7 @@ class Asset(models.Model):
     state_1_name = models.CharField(max_length=50, blank=True, default='On', help_text="Name for state 1")
 
     # ==================== OPERATION COUNTERS ====================
+    # Only used for IO service assets
     start_count = models.PositiveIntegerField(default=0, help_text="Number of start operations")
     hoist_up_count = models.PositiveIntegerField(default=0, help_text="Number of hoist up operations")
     hoist_down_count = models.PositiveIntegerField(default=0, help_text="Number of hoist down operations")
@@ -168,7 +173,7 @@ class Asset(models.Model):
             models.Index(fields=['value_type']),
             models.Index(fields=['is_active', 'timestamp']),
             models.Index(fields=['service', 'timestamp']),
-            # Indexes for operation counters
+            # Indexes for operation counters (only relevant for IO services)
             models.Index(fields=['start_count']),
             models.Index(fields=['hoist_up_count']),
             models.Index(fields=['hoist_down_count']),
@@ -182,20 +187,14 @@ class Asset(models.Model):
         return f"{self.service.name}.{self.asset_id}"
 
     def save(self, *args, **kwargs):
+        # REMOVED OPERATION COUNTING LOGIC FROM HERE
+        # Operation counting is now handled only in views.py during data ingestion
+        
         if not self.value_type or self.value_type == 'analog':
             self.value_type = self.detect_value_type()
         
         if not self.unit:
             self.unit = self.detect_unit()
-            
-        # Auto-detect operation type and update counters if this is a digital input change
-        if self.value_type == 'digital' and hasattr(self, 'pk'):
-            try:
-                old_asset = Asset.objects.get(pk=self.pk)
-                if old_asset.value != self.value:
-                    self.update_operation_counters(old_asset.value, self.value)
-            except Asset.DoesNotExist:
-                pass
                 
         super().save(*args, **kwargs)
 
@@ -237,50 +236,6 @@ class Asset(models.Model):
         
         return ''
 
-    def update_operation_counters(self, old_value, new_value):
-        """Update operation counters when digital input changes from 0→1"""
-        if old_value == 0 and new_value == 1:
-            asset_id_lower = self.asset_id.lower()
-            
-            # Detect operation type and increment appropriate counter
-            if 'start' in asset_id_lower:
-                self.start_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'hoist_up' in asset_id_lower or 'up' in asset_id_lower:
-                self.hoist_up_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'hoist_down' in asset_id_lower or 'down' in asset_id_lower:
-                self.hoist_down_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'ct_forward' in asset_id_lower or 'ct_fwd' in asset_id_lower:
-                self.ct_forward_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'ct_backward' in asset_id_lower or 'ct_bwd' in asset_id_lower:
-                self.ct_backward_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'lt_forward' in asset_id_lower or 'lt_fwd' in asset_id_lower:
-                self.lt_forward_count += 1
-                self.last_operation_start = self.timestamp
-            elif 'lt_backward' in asset_id_lower or 'lt_bwd' in asset_id_lower:
-                self.lt_backward_count += 1
-                self.last_operation_start = self.timestamp
-            
-            # Update total operation count
-            self.total_operation_count = (
-                self.start_count + self.hoist_up_count + self.hoist_down_count +
-                self.ct_forward_count + self.ct_backward_count +
-                self.lt_forward_count + self.lt_backward_count
-            )
-        
-        # Update operation end time when signal goes from 1→0
-        elif old_value == 1 and new_value == 0:
-            self.last_operation_end = self.timestamp
-            # Calculate duration and add to total
-            if self.last_operation_start and self.last_operation_end:
-                duration = (self.last_operation_end - self.last_operation_start).total_seconds()
-                if duration > 0:
-                    self.total_operation_duration += duration
-
     def get_display_value(self):
         """Get formatted value for display"""
         if self.value_type == 'digital':
@@ -298,7 +253,10 @@ class Asset(models.Model):
             return f"{formatted_value} {self.unit}".strip()
     
     def get_operation_summary(self):
-        """Get summary of all operation counts"""
+        """Get summary of all operation counts - ONLY FOR IO SERVICES"""
+        if not self.service.is_io_service():
+            return None
+            
         return {
             'start_count': self.start_count,
             'hoist_up_count': self.hoist_up_count,
@@ -323,6 +281,7 @@ class Asset(models.Model):
             return self.value >= 0
         return True
 
+# ... (DataHistory, ServiceConfiguration, SystemStatus models remain the same)
 class DataHistory(models.Model):
     """Historical data storage for tracking changes over time"""
     service = models.ForeignKey(Service, on_delete=models.CASCADE, db_index=True)

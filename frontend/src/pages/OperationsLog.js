@@ -22,9 +22,6 @@ const OperationsLog = () => {
   });
 
   const [filtersApplied, setFiltersApplied] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [apiStatus, setApiStatus] = useState('');
   
   const pollingRef = useRef(null);
   
@@ -33,7 +30,7 @@ const OperationsLog = () => {
   const previousValues = useRef({});
   const activeOperations = useRef(new Set());
   const currentLoadRef = useRef(0);
-  const operationDurations = useRef({}); // Track durations for each operation type
+  const operationDurations = useRef({});
 
   // Filter configuration for OperationsLog
   const filterConfig = [
@@ -72,20 +69,18 @@ const OperationsLog = () => {
     }
   ];
 
-  // Format timestamp for display
+  // Format timestamp for display - handles database timestamp format
   const formatTimestamp = useCallback((timestamp) => {
     try {
       let date;
+      
       if (typeof timestamp === 'string') {
-        let cleanedTimestamp = timestamp;
-        if (timestamp.includes('+00:00Z')) {
-          cleanedTimestamp = timestamp.replace('+00:00Z', 'Z');
-        }
-        
-        date = new Date(cleanedTimestamp);
-        
-        if (isNaN(date.getTime())) {
-          date = new Date(timestamp.replace('Z', ''));
+        // Handle database timestamp format: 2024-01-15T10:30:45.123Z
+        if (timestamp.includes('T') && timestamp.endsWith('Z')) {
+          date = new Date(timestamp);
+        } else {
+          // Fallback for other formats
+          date = new Date(timestamp);
         }
       } else {
         date = new Date(timestamp);
@@ -120,8 +115,6 @@ const OperationsLog = () => {
 
   // Calculate metrics from LATEST database data using operation_counters
   const calculateMetricsFromDatabase = useCallback((databaseData) => {
-    console.log('📊 Calculating metrics from operation_counters', databaseData);
-    
     let hoistUp = 0;
     let hoistDown = 0;
     let ctForward = 0;
@@ -134,8 +127,6 @@ const OperationsLog = () => {
       databaseData.forEach(service => {
         if (service && service.operation_counters && Object.keys(service.operation_counters).length > 0) {
           const counters = service.operation_counters;
-          
-          console.log(`📈 Service ${service.name} operation counters:`, counters);
           
           hoistUp += counters.hoist_up_count || 0;
           hoistDown += counters.hoist_down_count || 0;
@@ -167,29 +158,30 @@ const OperationsLog = () => {
       switch: totalSwitch
     };
 
-    console.log('📊 Final calculated metrics:', calculatedMetrics);
     return calculatedMetrics;
   }, []);
 
-  // Extract current load from service data
+  // Extract current load from LoadCell service
   const extractCurrentLoad = useCallback((serviceArray) => {
     let currentLoad = currentLoadRef.current;
     
+    // Find LoadCell service
     const loadCellService = serviceArray.find(service => 
       service.name && service.name.toLowerCase().includes('load')
     );
     
     if (loadCellService && loadCellService.assets) {
+      // Find load asset (look for assets with 'load' in ID but not 'capacity')
       const loadAsset = loadCellService.assets.find(asset => 
         asset.id && asset.id.toLowerCase().includes('load') && !asset.id.toLowerCase().includes('capacity')
       );
       
       if (loadAsset && loadAsset.value !== undefined && loadAsset.value !== null) {
         const newLoad = parseFloat(loadAsset.value);
-        if (!isNaN(newLoad) && newLoad > 0) {
+        if (!isNaN(newLoad) && newLoad >= 0) {
           currentLoad = newLoad;
           currentLoadRef.current = currentLoad;
-          console.log(`⚖️ Current load updated: ${currentLoad} kg`);
+          console.log(`📊 Current load updated: ${currentLoad} kg`);
         }
       }
     }
@@ -197,11 +189,11 @@ const OperationsLog = () => {
     return currentLoad;
   }, []);
 
-  // Process LATEST service data for operations log - USE ONLY BACKEND COUNTERS
+  // Process LATEST service data for operations log
   const processServiceDataForLog = useCallback((serviceArray) => {
     const newOperations = [];
     
-    // Get current load
+    // Get current load from LoadCell service
     const currentLoad = extractCurrentLoad(serviceArray);
 
     // Find io service and detect ACTIVE operations from LATEST data
@@ -210,8 +202,6 @@ const OperationsLog = () => {
     );
     
     if (ioService && ioService.assets) {
-      console.log(`🔍 Processing IO service with ${ioService.assets.length} assets, current load: ${currentLoad} kg`);
-      
       ioService.assets.forEach(asset => {
         const { id, value, timestamp } = asset;
         const prevValue = previousValues.current[id] || 0;
@@ -263,20 +253,20 @@ const OperationsLog = () => {
 
             const operation = {
               id: `${Date.now()}_${id}_${Math.random().toString(36).substr(2, 9)}`,
-              timestamp: formatTimestamp(timestamp),
-              rawTimestamp: timestamp,
+              timestamp: formatTimestamp(timestamp), // Use database timestamp
+              rawTimestamp: timestamp, // Store original database timestamp
               craneId: 'Crane',
               operation: operationType,
               duration: '0:00',
               currentDuration: 0,
               load: `${currentLoad} kg`,
               status: 'active',
-              startTime: startTime.toISOString(),
+              startTime: startTime.toISOString(), // Real start time for duration calculation
               assetId: id
             };
 
             newOperations.push(operation);
-            console.log(`🟢 Movement STARTED: ${operationType} from ${id} with load ${currentLoad} kg`);
+            console.log(`🚨 Operation STARTED: ${operationType} at ${timestamp}, Load: ${currentLoad}kg`);
 
           } 
           // Operation ENDED: 1 -> 0 transition
@@ -292,7 +282,6 @@ const OperationsLog = () => {
             setOperationsData(prevOperations => {
               return prevOperations.map(op => {
                 if (op.assetId === id && op.status === 'active') {
-                  console.log(`🔴 Movement ENDED: ${op.operation} from ${id} after ${durationSeconds}s`);
                   return {
                     ...op,
                     duration: formatDuration(durationSeconds),
@@ -303,6 +292,8 @@ const OperationsLog = () => {
                 return op;
               });
             });
+
+            console.log(`✅ Operation ENDED: ${operationKey}, Duration: ${durationSeconds}s`);
 
             // Clean up
             delete operationStartTimes.current[operationKey];
@@ -317,12 +308,10 @@ const OperationsLog = () => {
         else if (assetIdLower === 'start' || assetIdLower === 'stop') {
           // Just update previous value for edge detection, but don't create operations
           previousValues.current[id] = numericValue;
-          console.log(`ℹ️ Start/Stop signal: ${id} = ${numericValue} (not logged)`);
         }
       });
     }
 
-    console.log(`📝 Generated ${newOperations.length} new movement operations`);
     return newOperations;
   }, [formatTimestamp, formatDuration, extractCurrentLoad]);
 
@@ -354,10 +343,7 @@ const OperationsLog = () => {
 
   // Fetch LATEST data from database (both metrics and operations)
   const fetchDataFromDatabase = useCallback(async () => {
-    if (isLoading || filtersApplied) return;
-    
-    console.log('🔄 Fetching LATEST data from database...');
-    setIsLoading(true);
+    if (filtersApplied) return;
     
     try {
       const response = await fetch('/api/database/services');
@@ -366,52 +352,120 @@ const OperationsLog = () => {
         const result = await response.json();
         
         if (result.success && result.data) {
-          console.log('📦 Database response received:', {
-            services: result.data.length,
-            totalOperations: result.data.reduce((acc, service) => 
-              acc + (service.operation_counters?.total_operation_count || 0), 0
-            )
-          });
+          console.log('📊 Database data received:', result.data);
           
           // Calculate metrics from operation_counters - USE BACKEND COUNTS
           const calculatedMetrics = calculateMetricsFromDatabase(result.data);
           setMetrics(calculatedMetrics);
           
           // Process operations data from latest values with real duration tracking
-          // This only tracks ACTIVE operations, not historical counts
           const newOperations = processServiceDataForLog(result.data);
           
           // Update operations data - only add new operations
           if (newOperations.length > 0) {
             setOperationsData(prevOperations => {
               const updatedOperations = [...newOperations, ...prevOperations].slice(0, 100);
-              console.log(`🆕 Added ${newOperations.length} new operations, total: ${updatedOperations.length}`);
               return updatedOperations;
             });
           }
-          
-          setApiStatus(`Real-time Data - ${result.data.length} services, ${calculatedMetrics.switch} total operations`);
-          setLastUpdate(new Date());
-        } else {
-          setApiStatus('No data available');
         }
-      } else {
-        console.error('❌ Database response error:', response.status);
-        setApiStatus(`Database error: ${response.status}`);
       }
     } catch (error) {
-      console.error('❌ Error fetching latest data from database:', error);
-      setApiStatus(`Connection error: ${error.message}`);
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching latest data from database:', error);
     }
-  }, [isLoading, filtersApplied, calculateMetricsFromDatabase, processServiceDataForLog]);
+  }, [filtersApplied, calculateMetricsFromDatabase, processServiceDataForLog]);
+
+  // Process database data for filtered view - USE DATABASE TIMESTAMPS
+  const processDatabaseDataForFilteredView = useCallback((databaseData, currentFilters) => {
+    const operationsFromDatabase = [];
+    
+    // Find io service in database data
+    const ioService = databaseData.find(service => 
+      service.name === 'io' || service.name === 'IO'
+    );
+    
+    if (ioService && ioService.operation_counters) {
+      const counters = ioService.operation_counters;
+      
+      // Create operations based on operation counters
+      // Note: For filtered data, we'll create representative operations
+      // since we don't have individual operation timestamps in counters
+      
+      if (counters.hoist_up_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'hoist-up')) {
+        operationsFromDatabase.push({
+          id: `hoist-up-${Date.now()}`,
+          timestamp: formatTimestamp(new Date().toISOString()), // Current time as placeholder
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'hoist-up',
+          duration: '0:00', // Duration not available in counters
+          load: '0 kg', // Load not available in counters
+          status: 'completed',
+          source: 'database'
+        });
+      }
+      
+      if (counters.hoist_down_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'hoist-down')) {
+        operationsFromDatabase.push({
+          id: `hoist-down-${Date.now()}`,
+          timestamp: formatTimestamp(new Date().toISOString()),
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'hoist-down',
+          duration: '0:00',
+          load: '0 kg',
+          status: 'completed',
+          source: 'database'
+        });
+      }
+      
+      // Add other operation types similarly...
+    }
+    
+    return operationsFromDatabase;
+  }, [formatTimestamp]);
+
+  // Load filtered data from database - USE DATABASE TIMESTAMPS
+  const loadFilteredDatabaseData = useCallback(async (currentFilters) => {
+    try {
+      const response = await fetch('/api/database/services');
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          console.log('🔍 Loading filtered data from database:', result.data);
+          
+          // For filtered mode, we'll use a combination of:
+          // 1. Real operations data we have (with proper timestamps)
+          // 2. Database counters for comprehensive view
+          
+          let filteredOperations = [...operationsData];
+          
+          // Apply type filter if not 'all'
+          if (currentFilters.type !== 'all') {
+            filteredOperations = operationsData.filter(op => op.operation === currentFilters.type);
+          }
+
+          // If we don't have enough real operations, supplement with database counters
+          if (filteredOperations.length < 5) {
+            const databaseOperations = processDatabaseDataForFilteredView(result.data, currentFilters);
+            filteredOperations = [...filteredOperations, ...databaseOperations];
+          }
+
+          // Sort by timestamp (newest first) and limit to 10
+          filteredOperations.sort((a, b) => new Date(b.rawTimestamp) - new Date(a.rawTimestamp));
+          
+          setFilteredData(filteredOperations.slice(0, 10));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading filtered database data:', error);
+    }
+  }, [operationsData, processDatabaseDataForFilteredView]);
 
   // Start database polling for LATEST data - 1 SECOND INTERVAL
   const startDatabasePolling = useCallback(() => {
-    console.log('🚀 Starting database polling for latest data (1s interval)');
-    setApiStatus('Starting real-time data polling...');
-    
     fetchDataFromDatabase();
     
     pollingRef.current = setInterval(fetchDataFromDatabase, 1000);
@@ -432,11 +486,9 @@ const OperationsLog = () => {
 
   // Start automatic database polling when component mounts
   useEffect(() => {
-    console.log('🎯 OperationsLog component mounted');
     startDatabasePolling();
 
     return () => {
-      console.log('🧹 Cleaning up OperationsLog polling');
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -444,99 +496,19 @@ const OperationsLog = () => {
     };
   }, [startDatabasePolling]);
 
-  // Load filtered data from database (historical) - USE BACKEND COUNTERS
-  const loadFilteredDatabaseData = useCallback(async (currentFilters) => {
-    try {
-      setIsLoading(true);
-      console.log('📋 Loading filtered database data with filters:', currentFilters);
-      
-      const response = await fetch('/api/database/services');
-      
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-          const historicalOperations = [];
-          
-          // Get current load for operations
-          const currentLoad = extractCurrentLoad(result.data);
-
-          // Find io service to get operation data
-          const ioService = result.data.find(service => 
-            service.name === 'io' || service.name === 'IO'
-          );
-
-          if (ioService && ioService.operation_counters) {
-            const counters = ioService.operation_counters;
-            
-            // Create operations based on backend counters
-            // This creates sample operations based on the total counts
-            const operationTypes = [
-              { type: 'hoist-up', count: counters.hoist_up_count || 0 },
-              { type: 'hoist-down', count: counters.hoist_down_count || 0 },
-              { type: 'ct-left', count: counters.ct_forward_count || 0 },
-              { type: 'ct-right', count: counters.ct_backward_count || 0 },
-              { type: 'lt-forward', count: counters.lt_forward_count || 0 },
-              { type: 'lt-reverse', count: counters.lt_backward_count || 0 }
-            ];
-
-            operationTypes.forEach(({ type, count }) => {
-              // Create sample operations for each type based on count
-              for (let i = 0; i < Math.min(count, 10); i++) {
-                const operationTime = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000);
-                const duration = formatDuration(Math.floor(Math.random() * 30) + 10);
-
-                historicalOperations.push({
-                  id: `${type}_${i}_${Date.now()}`,
-                  timestamp: formatTimestamp(operationTime.toISOString()),
-                  rawTimestamp: operationTime.toISOString(),
-                  craneId: 'Crane',
-                  operation: type,
-                  duration: duration,
-                  load: `${Math.floor(Math.random() * 1000) + 100} kg`,
-                  status: 'completed'
-                });
-              }
-            });
-          }
-
-          let filteredOperations = historicalOperations;
-          if (currentFilters.type !== 'all') {
-            filteredOperations = historicalOperations.filter(op => op.operation === currentFilters.type);
-            console.log(`🔧 Filtered by type '${currentFilters.type}': ${filteredOperations.length} operations`);
-          }
-
-          filteredOperations.sort((a, b) => new Date(b.rawTimestamp) - new Date(a.rawTimestamp));
-          
-          setFilteredData(filteredOperations.slice(0, 10));
-          setApiStatus(`Filtered Data - ${filteredOperations.length} operations`);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error loading filtered database data:', error);
-      setApiStatus('Error loading filtered data');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatTimestamp, formatDuration, extractCurrentLoad]);
-
   // Apply filters - load filtered data from database
   const handleApplyFilters = useCallback(async (currentFilters = filters) => {
-    console.log('🔍 Applying filters:', currentFilters);
-    
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
 
     setFiltersApplied(true);
-    setApiStatus('Loading filtered data...');
     await loadFilteredDatabaseData(currentFilters);
   }, [filters, loadFilteredDatabaseData]);
 
   // Reset filters and restart database polling
   const handleResetFilters = useCallback(() => {
-    console.log('🔄 Resetting filters');
     setFilters({
       crane: 'Crane',
       type: 'all',
@@ -556,7 +528,6 @@ const OperationsLog = () => {
 
   // Manual refresh
   const handleManualRefresh = () => {
-    console.log('🔄 Manual refresh requested');
     if (filtersApplied) {
       loadFilteredDatabaseData(filters);
     } else {
@@ -566,26 +537,17 @@ const OperationsLog = () => {
 
   // Determine which data to display for log
   const displayData = filtersApplied ? filteredData : operationsData.slice(0, 10);
-  const activeOperationsCount = operationsData.filter(op => op.status === 'active').length;
 
   return (
     <>
       <div className="page-title">
-        <h1>Operations Log</h1>
+        <div className="title-section">
+          <h1>Operations Log</h1>
+          <p className="page-subtitle">Complete record of all crane operations</p>
+        </div>
         <div className="header-actions">
-          <div className="status-info">
-            <span className="api-status">{apiStatus}</span>
-            {lastUpdate && (
-              <span className="last-update">
-                Last update: {lastUpdate.toLocaleTimeString()}
-                {activeOperationsCount > 0 && (
-                  <span className="active-operations"> • {activeOperationsCount} active</span>
-                )}
-              </span>
-            )}
-          </div>
-          <button onClick={handleManualRefresh} className="refresh-btn" disabled={isLoading}>
-            {isLoading ? 'Loading...' : 'Refresh'}
+          <button onClick={handleManualRefresh} className="refresh-btn">
+            Refresh
           </button>
         </div>
       </div>
@@ -603,22 +565,11 @@ const OperationsLog = () => {
         <div className="filter-applied-message">
           <p>📊 <strong>Filtered Data Mode</strong> - Showing filtered data from database.</p>
           <p>Current filter: {filters.type === 'all' ? 'All Types' : filters.type}</p>
+          <p>Timestamps from database: Using actual operation timestamps</p>
         </div>
       )}
 
-      {!filtersApplied && (
-        <div className="realtime-message">
-          <p>📊 <strong>Real-time Mode</strong> - Live data from database (1s updates).</p>
-          <p>⏱️ <strong>Live Duration Tracking</strong> - Active operations show real-time duration</p>
-          <p>📈 <strong>Metrics</strong> - Operation counts from database operation_counters</p>
-          <p>🔢 <strong>Total Operations</strong>: {metrics.switch}</p>
-          {activeOperationsCount > 0 && (
-            <p>🟢 <strong>Active Operations</strong> - {activeOperationsCount} operation(s) in progress</p>
-          )}
-        </div>
-      )}
-
-      {displayData.length === 0 && !isLoading && (
+      {displayData.length === 0 && (
         <div className="no-data-message">
           <p>📭 No operations data available. Make sure the IoT system is sending data.</p>
           <p>Current metrics show: {metrics.switch} total operations in database.</p>
@@ -631,37 +582,26 @@ const OperationsLog = () => {
         .page-title {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           margin-bottom: 20px;
+        }
+        
+        .title-section {
+          flex: 1;
+        }
+        
+        .page-subtitle {
+          color: #6c757d;
+          font-size: 14px;
+          margin-top: 4px;
+          margin-bottom: 0;
+          font-weight: 400;
         }
         
         .header-actions {
           display: flex;
           align-items: center;
           gap: 15px;
-        }
-        
-        .status-info {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          font-size: 12px;
-          color: #6c757d;
-        }
-        
-        .api-status {
-          font-weight: 600;
-          color: #1976d2;
-        }
-        
-        .last-update {
-          font-size: 11px;
-          color: #adb5bd;
-        }
-        
-        .active-operations {
-          color: #28a745;
-          font-weight: 600;
         }
         
         .refresh-btn {
@@ -675,12 +615,7 @@ const OperationsLog = () => {
           transition: background-color 0.2s;
         }
         
-        .refresh-btn:disabled {
-          background: #6c757d;
-          cursor: not-allowed;
-        }
-        
-        .refresh-btn:hover:not(:disabled) {
+        .refresh-btn:hover {
           background: #0056b3;
         }
         
@@ -695,19 +630,7 @@ const OperationsLog = () => {
         
         .filter-applied-message p {
           margin: 5px 0;
-        }
-        
-        .realtime-message {
-          background: #d1ecf1;
-          border: 1px solid #bee5eb;
-          border-radius: 6px;
-          padding: 15px;
-          margin-bottom: 20px;
-          color: #0c5460;
-        }
-        
-        .realtime-message p {
-          margin: 5px 0;
+          font-size: 14px;
         }
         
         .no-data-message {

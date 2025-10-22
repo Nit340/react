@@ -251,6 +251,7 @@ class IOAsset(Asset):
     # ==================== OPERATION COUNTERS ====================
     # Only used for IO service assets
     start_count = models.PositiveIntegerField(default=0, help_text="Number of start operations")
+    stop_count = models.PositiveIntegerField(default=0, help_text="Number of stop operations")  # ← ADD THIS
     hoist_up_count = models.PositiveIntegerField(default=0, help_text="Number of hoist up operations")
     hoist_down_count = models.PositiveIntegerField(default=0, help_text="Number of hoist down operations")
     ct_forward_count = models.PositiveIntegerField(default=0, help_text="Number of CT forward movements")
@@ -272,6 +273,7 @@ class IOAsset(Asset):
         verbose_name_plural = 'IO Assets'
         indexes = [
             models.Index(fields=['start_count']),
+            models.Index(fields=['stop_count']),  # ← ADD INDEX FOR STOP COUNT
             models.Index(fields=['hoist_up_count']),
             models.Index(fields=['hoist_down_count']),
             models.Index(fields=['total_operation_count']),
@@ -281,6 +283,7 @@ class IOAsset(Asset):
         """Get summary of all operation counts - ONLY FOR IO SERVICES"""
         return {
             'start_count': self.start_count,
+            'stop_count': self.stop_count,  # ← INCLUDE STOP COUNT
             'hoist_up_count': self.hoist_up_count,
             'hoist_down_count': self.hoist_down_count,
             'ct_forward_count': self.ct_forward_count,

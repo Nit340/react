@@ -7,7 +7,9 @@ import requests
 from collections import deque
 import threading
 from django.db import transaction, models
-from .models import Crane, Service, Asset
+from .models import Crane, Service, Asset, IOAsset  # ← THIS IS THE FIX
+from django.db.models import Sum, Max, Count
+import traceback
 
 # ==================== CONFIGURATION ====================
 EXTERNAL_SERVER_GET_BASE_URL = "http://172.28.176.174:5000"
@@ -18,10 +20,9 @@ iot_data_store = {
     'services': [],
     'notifications': deque(maxlen=10)
 }
-
 # ==================== DATABASE STORAGE FUNCTIONS ====================
 def save_to_database_async(services_data):
-    """Save IoT data to database in a separate thread - ONLY IO SERVICES GET OPERATION COUNTERS"""
+    """Save IoT data to database - USE IOAsset FOR IO SERVICES"""
     def save_data():
         try:
             with transaction.atomic():
@@ -51,7 +52,7 @@ def save_to_database_async(services_data):
                         )
                         total_services_processed += 1
                         
-                        # Check if this is an IO service that needs operation counters
+                        # Check if this is an IO service
                         is_io_service = service.is_io_service()
                         print(f"🔍 Service {service_name} is IO service: {is_io_service}")
                         
@@ -72,108 +73,119 @@ def save_to_database_async(services_data):
                                 
                                 print(f"📊 Asset: {asset_id} = {asset_value} at {timestamp}")
                                 
-                                # Get existing asset to check for value changes
-                                existing_asset = Asset.objects.filter(
-                                    service=service,
-                                    asset_id=asset_id
-                                ).first()
-                                
-                                # Prepare update data - basic fields for all assets
-                                update_data = {
+                                # Prepare base update data for all assets
+                                base_update_data = {
                                     'value': asset_value,
                                     'timestamp': timestamp,
                                 }
                                 
-                                # ONLY PROCESS OPERATION COUNTERS FOR IO SERVICES
-                                if is_io_service and existing_asset:
-                                    old_value = existing_asset.value
-                                    new_value = asset_value
+                                # ==================== IO SERVICE LOGIC ====================
+                                if is_io_service:
+                                    # For IO services, use IOAsset model
+                                    existing_asset = IOAsset.objects.filter(
+                                        service=service,
+                                        asset_id=asset_id
+                                    ).first()
                                     
-                                    # Check if this is a digital asset that might trigger operations
-                                    asset_id_lower = asset_id.lower()
-                                    is_digital_asset = any(keyword in asset_id_lower for keyword in 
-                                                        ['start', 'stop', 'hoist', 'ct_', 'lt_', 'in', 'out'])
+                                    io_update_data = base_update_data.copy()
                                     
-                                    if is_digital_asset:
-                                        print(f"🔍 IO Service Digital asset: {asset_id}, old: {old_value}, new: {new_value}")
+                                    if existing_asset:
+                                        old_value = existing_asset.value
+                                        new_value = asset_value
                                         
-                                        # Operation detected: 0 → 1 transition
-                                        if old_value == 0 and new_value == 1:
-                                            print(f"🚨 IO SERVICE OPERATION TRIGGERED: {asset_id} changed from {old_value}→{new_value}")
-                                            
-                                            # IMPROVED PATTERN MATCHING - ONLY FOR IO SERVICES
-                                            if 'hoist_up' in asset_id_lower or ('hoist' in asset_id_lower and 'up' in asset_id_lower):
-                                                update_data['hoist_up_count'] = existing_asset.hoist_up_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → hoist_up_count = {update_data['hoist_up_count']}")
-                                            
-                                            elif 'hoist_down' in asset_id_lower or ('hoist' in asset_id_lower and 'down' in asset_id_lower):
-                                                update_data['hoist_down_count'] = existing_asset.hoist_down_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → hoist_down_count = {update_data['hoist_down_count']}")
-                                            
-                                            elif 'ct_left' in asset_id_lower or ('ct' in asset_id_lower and 'left' in asset_id_lower):
-                                                update_data['ct_forward_count'] = existing_asset.ct_forward_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → ct_forward_count = {update_data['ct_forward_count']}")
-                                            
-                                            elif 'ct_right' in asset_id_lower or ('ct' in asset_id_lower and 'right' in asset_id_lower):
-                                                update_data['ct_backward_count'] = existing_asset.ct_backward_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → ct_backward_count = {update_data['ct_backward_count']}")
-                                            
-                                            elif 'lt_forward' in asset_id_lower or ('lt' in asset_id_lower and 'forward' in asset_id_lower):
-                                                update_data['lt_forward_count'] = existing_asset.lt_forward_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → lt_forward_count = {update_data['lt_forward_count']}")
-                                            
-                                            elif 'lt_reverse' in asset_id_lower or ('lt' in asset_id_lower and 'reverse' in asset_id_lower):
-                                                update_data['lt_backward_count'] = existing_asset.lt_backward_count + 1
-                                                update_data['last_operation_start'] = timestamp
-                                                print(f"✅ IO SERVICE COUNTED: {asset_id} → lt_backward_count = {update_data['lt_backward_count']}")
-                                            
-                                            elif 'start' in asset_id_lower:
-                                                update_data['start_count'] = existing_asset.start_count + 1
-                                                print(f"ℹ️ IO SERVICE COUNTED: {asset_id} → start_count = {update_data['start_count']}")
-                                            
-                                            else:
-                                                print(f"❌ IO SERVICE UNKNOWN OPERATION: {asset_id} - NOT COUNTED!")
+                                        # Check if this is a digital asset that might trigger operations
+                                        asset_id_lower = asset_id.lower()
+                                        is_digital_asset = any(keyword in asset_id_lower for keyword in 
+                                                            ['start', 'stop', 'hoist', 'ct_', 'lt_', 'in', 'out'])
                                         
-                                        # Operation ended: 1 → 0 transition  
-                                        elif old_value == 1 and new_value == 0:
-                                            print(f"🔚 IO SERVICE OPERATION ENDED: {asset_id} changed from {old_value}→{new_value}")
-                                            update_data['last_operation_end'] = timestamp
+                                        if is_digital_asset:
+                                            print(f"🔍 IO Service Digital asset: {asset_id}, old: {old_value}, new: {new_value}")
                                             
-                                            # Calculate duration and add to total if we have start time
-                                            if existing_asset.last_operation_start and timestamp:
-                                                duration = (timestamp - existing_asset.last_operation_start).total_seconds()
-                                                if duration > 0:
-                                                    update_data['total_operation_duration'] = existing_asset.total_operation_duration + duration
-                                                    print(f"⏱️ IO SERVICE: Added {duration:.2f}s to total_operation_duration: {update_data['total_operation_duration']:.2f}")
-                                
-                                # Create or update asset
-                                asset, asset_created = Asset.objects.update_or_create(
-                                    service=service,
-                                    asset_id=asset_id,
-                                    defaults=update_data
-                                )
-                                
-                                # Update total operation count for MOVEMENT operations only - ONLY FOR IO SERVICES
-                                if not asset_created and is_io_service:
-                                    total_movement_ops = (
-                                        asset.hoist_up_count + 
-                                        asset.hoist_down_count +
-                                        asset.ct_forward_count + 
-                                        asset.ct_backward_count +
-                                        asset.lt_forward_count + 
-                                        asset.lt_backward_count
+                                            # Operation detected: 0 → 1 transition
+                                            if old_value == 0 and new_value == 1:
+                                                print(f"🚨 IO SERVICE OPERATION TRIGGERED: {asset_id} changed from {old_value}→{new_value}")
+                                                
+                                                # Pattern matching for IO operations
+                                                if 'hoist_up' in asset_id_lower or ('hoist' in asset_id_lower and 'up' in asset_id_lower):
+                                                    io_update_data['hoist_up_count'] = existing_asset.hoist_up_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → hoist_up_count = {io_update_data['hoist_up_count']}")
+                                                
+                                                elif 'hoist_down' in asset_id_lower or ('hoist' in asset_id_lower and 'down' in asset_id_lower):
+                                                    io_update_data['hoist_down_count'] = existing_asset.hoist_down_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → hoist_down_count = {io_update_data['hoist_down_count']}")
+                                                
+                                                elif 'ct_left' in asset_id_lower or ('ct' in asset_id_lower and 'left' in asset_id_lower):
+                                                    io_update_data['ct_forward_count'] = existing_asset.ct_forward_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → ct_forward_count = {io_update_data['ct_forward_count']}")
+                                                
+                                                elif 'ct_right' in asset_id_lower or ('ct' in asset_id_lower and 'right' in asset_id_lower):
+                                                    io_update_data['ct_backward_count'] = existing_asset.ct_backward_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → ct_backward_count = {io_update_data['ct_backward_count']}")
+                                                
+                                                elif 'lt_forward' in asset_id_lower or ('lt' in asset_id_lower and 'forward' in asset_id_lower):
+                                                    io_update_data['lt_forward_count'] = existing_asset.lt_forward_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → lt_forward_count = {io_update_data['lt_forward_count']}")
+                                                
+                                                elif 'lt_reverse' in asset_id_lower or ('lt' in asset_id_lower and 'reverse' in asset_id_lower):
+                                                    io_update_data['lt_backward_count'] = existing_asset.lt_backward_count + 1
+                                                    io_update_data['last_operation_start'] = timestamp
+                                                    print(f"✅ IO SERVICE COUNTED: {asset_id} → lt_backward_count = {io_update_data['lt_backward_count']}")
+                                                
+                                                elif 'start' in asset_id_lower:
+                                                    io_update_data['start_count'] = existing_asset.start_count + 1
+                                                    print(f"ℹ️ IO SERVICE COUNTED: {asset_id} → start_count = {io_update_data['start_count']}")
+                                                
+                                                else:
+                                                    print(f"❌ IO SERVICE UNKNOWN OPERATION: {asset_id} - NOT COUNTED!")
+                                            
+                                            # Operation ended: 1 → 0 transition  
+                                            elif old_value == 1 and new_value == 0:
+                                                print(f"🔚 IO SERVICE OPERATION ENDED: {asset_id} changed from {old_value}→{new_value}")
+                                                io_update_data['last_operation_end'] = timestamp
+                                                
+                                                # Calculate duration and add to total if we have start time
+                                                if existing_asset.last_operation_start and timestamp:
+                                                    duration = (timestamp - existing_asset.last_operation_start).total_seconds()
+                                                    if duration > 0:
+                                                        io_update_data['total_operation_duration'] = existing_asset.total_operation_duration + duration
+                                                        print(f"⏱️ IO SERVICE: Added {duration:.2f}s to total_operation_duration: {io_update_data['total_operation_duration']:.2f}")
+                                    
+                                    # Create or update IOAsset
+                                    io_asset, io_asset_created = IOAsset.objects.update_or_create(
+                                        service=service,
+                                        asset_id=asset_id,
+                                        defaults=io_update_data
                                     )
                                     
-                                    if asset.total_operation_count != total_movement_ops:
-                                        # We need to save again with updated total
-                                        asset.total_operation_count = total_movement_ops
-                                        asset.save(update_fields=['total_operation_count'])
-                                        print(f"🔢 IO SERVICE TOTAL OPERATIONS: {asset.total_operation_count}")
+                                    # Update total operation count for MOVEMENT operations only
+                                    if not io_asset_created:
+                                        total_movement_ops = (
+                                            io_asset.hoist_up_count + 
+                                            io_asset.hoist_down_count +
+                                            io_asset.ct_forward_count + 
+                                            io_asset.ct_backward_count +
+                                            io_asset.lt_forward_count + 
+                                            io_asset.lt_backward_count
+                                        )
+                                        
+                                        if io_asset.total_operation_count != total_movement_ops:
+                                            io_asset.total_operation_count = total_movement_ops
+                                            io_asset.save(update_fields=['total_operation_count'])
+                                            print(f"🔢 IO SERVICE TOTAL OPERATIONS: {io_asset.total_operation_count}")
+                                
+                                else:
+                                    # ==================== NON-IO SERVICE LOGIC ====================
+                                    # For non-IO services, use base Asset model
+                                    asset, asset_created = Asset.objects.update_or_create(
+                                        service=service,
+                                        asset_id=asset_id,
+                                        defaults=base_update_data
+                                    )
                                 
                                 total_assets_processed += 1
                 
@@ -191,107 +203,118 @@ def save_to_database_async(services_data):
 
 @require_http_methods(["GET"])
 def get_database_services(request):
-    """Get LATEST services data from database - ONLY IO SERVICES HAVE OPERATION COUNTERS"""
+    """Get LATEST services data from database - SIMPLIFIED WORKING VERSION"""
     try:
-        from django.db.models import Max
+        print("🔄 Starting database data fetch...")
         
         # Get default crane
         crane = Crane.objects.filter(name="Crane").first()
         if not crane:
+            print("❌ No crane found in database")
             return JsonResponse({
                 "success": False,
                 "error": "No crane found",
                 "timestamp": datetime.now().isoformat() + 'Z'
             }, status=404)
         
-        services = Service.objects.filter(crane=crane)
+        print(f"✅ Found crane: {crane.name}")
+        
+        services = crane.services.filter(is_active=True)
+        print(f"📊 Found {services.count()} active services for crane")
+        
         service_data = []
         
         for service in services:
-            # Get the latest timestamp for each asset in this service
-            latest_timestamps = Asset.objects.filter(
-                service=service
-            ).values('asset_id').annotate(
-                latest_timestamp=Max('timestamp')
-            )
+            print(f"🔍 Processing service: {service.name} (type: {service.service_type})")
             
-            # Get assets with their latest values
-            latest_assets = []
+            is_io_service = service.is_io_service()
+            assets = []
             
-            # Initialize operation counters ONLY for IO services
-            service_operation_counters = None
-            if service.is_io_service():
-                service_operation_counters = {
-                    'start_count': 0,
-                    'hoist_up_count': 0,
-                    'hoist_down_count': 0,
-                    'ct_forward_count': 0,
-                    'ct_backward_count': 0,
-                    'lt_forward_count': 0,
-                    'lt_backward_count': 0,
-                    'total_operation_count': 0,
-                    'total_operation_duration': 0.0,
-                    'last_operation_start': None,
-                    'last_operation_end': None
-                }
-            
-            for item in latest_timestamps:
-                latest_asset = Asset.objects.filter(
-                    service=service,
-                    asset_id=item['asset_id'],
-                    timestamp=item['latest_timestamp']
-                ).first()
+            if is_io_service:
+                # For IO services, get all IOAssets and group by asset_id to get latest
+                all_assets = IOAsset.objects.filter(service=service).order_by('asset_id', '-timestamp')
+                seen_assets = set()
                 
-                if latest_asset:
-                    # Add regular asset data
-                    latest_assets.append({
-                        'id': latest_asset.asset_id,
-                        'value': latest_asset.value,
-                        'timestamp': latest_asset.timestamp.isoformat() + 'Z',
-                        'value_type': latest_asset.value_type,
-                        'unit': latest_asset.unit
-                    })
-                    
-                    # ACCUMULATE operation counters ONLY for IO services
-                    if service.is_io_service() and service_operation_counters is not None:
-                        service_operation_counters['start_count'] += latest_asset.start_count
-                        service_operation_counters['hoist_up_count'] += latest_asset.hoist_up_count
-                        service_operation_counters['hoist_down_count'] += latest_asset.hoist_down_count
-                        service_operation_counters['ct_forward_count'] += latest_asset.ct_forward_count
-                        service_operation_counters['ct_backward_count'] += latest_asset.ct_backward_count
-                        service_operation_counters['lt_forward_count'] += latest_asset.lt_forward_count
-                        service_operation_counters['lt_backward_count'] += latest_asset.lt_backward_count
-                        service_operation_counters['total_operation_count'] += latest_asset.total_operation_count
-                        service_operation_counters['total_operation_duration'] += latest_asset.total_operation_duration
-                        
-                        # Keep the most recent operation timestamps
-                        if latest_asset.last_operation_start:
-                            if (service_operation_counters['last_operation_start'] is None or 
-                                latest_asset.last_operation_start > service_operation_counters['last_operation_start']):
-                                service_operation_counters['last_operation_start'] = latest_asset.last_operation_start
-                        
-                        if latest_asset.last_operation_end:
-                            if (service_operation_counters['last_operation_end'] is None or 
-                                latest_asset.last_operation_end > service_operation_counters['last_operation_end']):
-                                service_operation_counters['last_operation_end'] = latest_asset.last_operation_end
+                for asset in all_assets:
+                    if asset.asset_id not in seen_assets:
+                        seen_assets.add(asset.asset_id)
+                        asset_data = {
+                            'id': asset.asset_id,
+                            'value': asset.value,
+                            'timestamp': asset.timestamp.isoformat() + 'Z',
+                            'value_type': asset.value_type,
+                            'unit': asset.unit,
+                            'operation_data': {
+                                'start_count': asset.start_count,
+                                'hoist_up_count': asset.hoist_up_count,
+                                'hoist_down_count': asset.hoist_down_count,
+                                'ct_forward_count': asset.ct_forward_count,
+                                'ct_backward_count': asset.ct_backward_count,
+                                'lt_forward_count': asset.lt_forward_count,
+                                'lt_backward_count': asset.lt_backward_count,
+                                'total_operation_count': asset.total_operation_count,
+                                'total_operation_duration': asset.total_operation_duration,
+                            }
+                        }
+                        assets.append(asset_data)
+                        print(f"    ✅ IO Asset {asset.asset_id}: value={asset.value}, ops={asset.total_operation_count}")
+            else:
+                # For non-IO services, get all Assets and group by asset_id to get latest
+                all_assets = Asset.objects.filter(service=service).order_by('asset_id', '-timestamp')
+                seen_assets = set()
+                
+                for asset in all_assets:
+                    if asset.asset_id not in seen_assets:
+                        seen_assets.add(asset.asset_id)
+                        asset_data = {
+                            'id': asset.asset_id,
+                            'value': asset.value,
+                            'timestamp': asset.timestamp.isoformat() + 'Z',
+                            'value_type': asset.value_type,
+                            'unit': asset.unit
+                        }
+                        assets.append(asset_data)
+                        print(f"    ✅ Asset {asset.asset_id}: value={asset.value}")
             
-            # Format timestamps for JSON (only for IO services)
-            if service_operation_counters:
-                if service_operation_counters['last_operation_start']:
-                    service_operation_counters['last_operation_start'] = service_operation_counters['last_operation_start'].isoformat() + 'Z'
-                if service_operation_counters['last_operation_end']:
-                    service_operation_counters['last_operation_end'] = service_operation_counters['last_operation_end'].isoformat() + 'Z'
+            # Calculate service operation counters for IO services
+            service_operation_counters = None
+            if is_io_service:
+                totals = IOAsset.objects.filter(service=service).aggregate(
+                    total_start=Sum('start_count'),
+                    total_hoist_up=Sum('hoist_up_count'),
+                    total_hoist_down=Sum('hoist_down_count'),
+                    total_ct_forward=Sum('ct_forward_count'),
+                    total_ct_backward=Sum('ct_backward_count'),
+                    total_lt_forward=Sum('lt_forward_count'),
+                    total_lt_backward=Sum('lt_backward_count'),
+                    total_operations=Sum('total_operation_count'),
+                    total_duration=Sum('total_operation_duration')
+                )
+                
+                service_operation_counters = {
+                    'start_count': totals['total_start'] or 0,
+                    'hoist_up_count': totals['total_hoist_up'] or 0,
+                    'hoist_down_count': totals['total_hoist_down'] or 0,
+                    'ct_forward_count': totals['total_ct_forward'] or 0,
+                    'ct_backward_count': totals['total_ct_backward'] or 0,
+                    'lt_forward_count': totals['total_lt_forward'] or 0,
+                    'lt_backward_count': totals['total_lt_backward'] or 0,
+                    'total_operation_count': totals['total_operations'] or 0,
+                    'total_operation_duration': totals['total_duration'] or 0.0,
+                }
             
             service_data.append({
                 'name': service.name,
                 'service_type': service.service_type,
-                'is_io_service': service.is_io_service(),
-                'assets': latest_assets,
-                'total_assets': len(latest_assets),
-                'operation_counters': service_operation_counters  # Will be None for non-IO services
+                'is_io_service': is_io_service,
+                'assets': assets,
+                'total_assets': len(assets),
+                'operation_counters': service_operation_counters
             })
+            
+            print(f"  ✅ Completed service {service.name} with {len(assets)} assets")
         
-        print(f"📊 Database: Returning {len(service_data)} services with {sum(len(s['assets']) for s in service_data)} latest assets")
+        print(f"🎉 Successfully fetched {len(service_data)} services with {sum(len(s['assets']) for s in service_data)} total assets")
         
         return JsonResponse({
             "success": True,
@@ -314,6 +337,174 @@ def get_database_services(request):
             "error": str(e),
             "timestamp": datetime.now().isoformat() + 'Z'
         }, status=500)
+    
+@require_http_methods(["GET"])
+def debug_database_content(request):
+    """Debug endpoint to check what's actually in the database"""
+    try:
+        print("🔍 DEBUG: Checking database content...")
+        
+        # Check if database tables exist
+        try:
+            cranes = Crane.objects.all()
+            services = Service.objects.all()
+            assets = Asset.objects.all()
+            io_assets = IOAsset.objects.all()
+            
+            print(f"✅ Database tables accessible")
+        except Exception as db_error:
+            print(f"❌ Database error: {db_error}")
+            return JsonResponse({
+                "success": False,
+                "error": f"Database error: {str(db_error)}",
+                "timestamp": datetime.now().isoformat() + 'Z'
+            }, status=500)
+        
+        # Check cranes
+        crane_data = []
+        for crane in cranes:
+            services = crane.services.all()
+            crane_data.append({
+                'id': crane.id,
+                'name': crane.name,
+                'is_active': crane.is_active,
+                'services_count': services.count(),
+                'services': [{
+                    'id': s.id, 
+                    'name': s.name, 
+                    'type': s.service_type, 
+                    'is_active': s.is_active
+                } for s in services]
+            })
+        
+        # Check assets count
+        total_assets = assets.count()
+        total_io_assets = io_assets.count()
+        
+        # Check recent assets
+        recent_assets = list(assets.order_by('-timestamp')[:3].values(
+            'id', 'asset_id', 'value', 'timestamp', 'service__name', 'value_type'
+        ))
+        
+        recent_io_assets = list(io_assets.order_by('-timestamp')[:3].values(
+            'id', 'asset_id', 'value', 'timestamp', 'service__name', 'hoist_up_count'
+        ))
+        
+        print(f"✅ DEBUG: Found {len(cranes)} cranes, {total_assets} assets, {total_io_assets} IO assets")
+        
+        return JsonResponse({
+            "success": True,
+            "database_status": "accessible",
+            "cranes": crane_data,
+            "counts": {
+                "total_assets": total_assets,
+                "total_io_assets": total_io_assets,
+                "total_records": total_assets + total_io_assets
+            },
+            "recent_assets": recent_assets,
+            "recent_io_assets": recent_io_assets,
+            "timestamp": datetime.now().isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"❌ DEBUG Error: {e}")
+        error_traceback = traceback.format_exc()
+        print(f"Traceback: {error_traceback}")
+        
+        return JsonResponse({
+            "success": False,
+            "error": str(e),
+            "traceback": error_traceback,
+            "timestamp": datetime.now().isoformat() + 'Z'
+        }, status=500)
+
+@require_http_methods(["GET"])
+def debug_service_assets(request, service_name):
+    """Debug specific service assets"""
+    try:
+        print(f"🔍 DEBUG: Checking service '{service_name}'")
+        
+        # First, check if service exists
+        try:
+            service = Service.objects.get(name=service_name)
+            print(f"✅ Found service: {service.name}, type: {service.service_type}")
+        except Service.DoesNotExist:
+            print(f"❌ Service '{service_name}' not found")
+            
+            # List available services
+            available_services = list(Service.objects.all().values('name', 'service_type'))
+            
+            return JsonResponse({
+                "success": False,
+                "error": f"Service '{service_name}' not found",
+                "available_services": available_services,
+                "timestamp": datetime.now().isoformat() + 'Z'
+            }, status=404)
+        
+        is_io = service.is_io_service()
+        print(f"Service is IO: {is_io}")
+        
+        asset_data = []
+        
+        if is_io:
+            # For IO services
+            assets = IOAsset.objects.filter(service=service).order_by('asset_id')
+            print(f"Found {assets.count()} IO assets")
+            
+            for asset in assets:
+                asset_info = {
+                    'asset_id': asset.asset_id,
+                    'value': asset.value,
+                    'timestamp': asset.timestamp.isoformat() + 'Z',
+                    'value_type': asset.value_type,
+                    'hoist_up_count': asset.hoist_up_count,
+                    'hoist_down_count': asset.hoist_down_count,
+                    'total_operations': asset.total_operation_count,
+                }
+                asset_data.append(asset_info)
+                print(f"  📊 IO Asset: {asset.asset_id} = {asset.value}, operations: {asset.total_operation_count}")
+        else:
+            # For non-IO services
+            assets = Asset.objects.filter(service=service).order_by('asset_id')
+            print(f"Found {assets.count()} regular assets")
+            
+            for asset in assets:
+                asset_info = {
+                    'asset_id': asset.asset_id,
+                    'value': asset.value,
+                    'timestamp': asset.timestamp.isoformat() + 'Z',
+                    'value_type': asset.value_type,
+                    'unit': asset.unit
+                }
+                asset_data.append(asset_info)
+                print(f"  📊 Asset: {asset.asset_id} = {asset.value}")
+        
+        print(f"✅ Service {service_name} has {len(asset_data)} assets")
+        
+        return JsonResponse({
+            "success": True,
+            "service": {
+                "name": service.name,
+                "type": service.service_type,
+                "is_io": is_io,
+                "is_active": service.is_active
+            },
+            "assets": asset_data,
+            "total_assets": len(asset_data),
+            "timestamp": datetime.now().isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"❌ DEBUG Service Error: {e}")
+        error_traceback = traceback.format_exc()
+        print(f"Traceback: {error_traceback}")
+        
+        return JsonResponse({
+            "success": False,
+            "error": str(e),
+            "traceback": error_traceback,
+            "timestamp": datetime.now().isoformat() + 'Z'
+        }, status=500)
 
 @require_http_methods(["GET"])
 def debug_operation_counters(request):
@@ -323,8 +514,8 @@ def debug_operation_counters(request):
     # Get only IO services
     io_services = Service.objects.filter(service_type='io')
     
-    # Get all assets with any operation counts from IO services only
-    assets_with_operations = Asset.objects.filter(
+    # Get all IOAssets with any operation counts from IO services only
+    assets_with_operations = IOAsset.objects.filter(
         service__in=io_services
     ).filter(
         models.Q(start_count__gt=0) |
@@ -350,7 +541,7 @@ def debug_operation_counters(request):
     debug_data = list(assets_with_operations)
     
     # Also get service-wise totals for IO services only
-    service_totals = Asset.objects.filter(service__in=io_services).values('service__name').annotate(
+    service_totals = IOAsset.objects.filter(service__in=io_services).values('service__name').annotate(
         total_start=Sum('start_count'),
         total_hoist_up=Sum('hoist_up_count'),
         total_hoist_down=Sum('hoist_down_count'),

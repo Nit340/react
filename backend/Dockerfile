@@ -1,57 +1,48 @@
 # ===========================
 # Stage 1: Builder
 # ===========================
-FROM python:3.11-alpine AS builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache --virtual .build-deps \
-        build-base \
-        libffi-dev \
-        musl-dev \
-        gcc \
-        python3-dev \
-        openssl-dev \
-        curl
-
+# Copy and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # ===========================
-# Stage 2: Final image
+# Stage 2: Final Image
 # ===========================
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
+# Copy application code
 COPY . .
 
-RUN rm -f db.sqlite3 \
-    && rm -rf __pycache__/ */__pycache__/ .pytest_cache/ *.log
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-RUN rm -rf /var/cache/apk/* /root/.cache \
-    && find /usr/local -type d -name "__pycache__" -exec rm -rf {} + \
-    && find /usr/local/lib/python3.11/site-packages -name "tests" -exec rm -rf {} + \
-    && find /usr/local/lib/python3.11/site-packages -name "*.dist-info" -exec rm -rf {} +
-
-RUN adduser -D appuser && chown -R appuser /app
+# Create non-root user
+RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
+# Expose Django port
 EXPOSE 8000
 
-# ✅ Environment variables for Django superuser
+# ✅ Environment variables
 ENV DJANGO_SUPERUSER_USERNAME=inno \
     DJANGO_SUPERUSER_PASSWORD=InnoSpace@2025 \
-    DJANGO_SUPERUSER_EMAIL=inno@example.com
+    DJANGO_SUPERUSER_EMAIL=inno@example.com \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DJANGO_SETTINGS_MODULE=backend_project.settings \
+    ALLOWED_HOSTS=* \
+    DEBUG=True
 
-# ✅ Run migrations, create superuser (non-interactive), and start server
-CMD ["sh", "-c", "\
-python manage.py makemigrations && \
-python manage.py migrate && \
-python manage.py createsuperuser --noinput || true && \
-python manage.py runserver 0.0.0.0:8000 \
-"]
-
+# Use entrypoint for all startup logic
+ENTRYPOINT ["/entrypoint.sh"]

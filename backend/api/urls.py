@@ -21,4 +21,5 @@ urlpatterns = [
     # ==================== ONBOARD NOTIFICATION ENDPOINTS ====================
     path('api/onboard-notification', views.receive_onboard_notification, name='receive_onboard_notification'),
     path('api/onboard-notifications', views.get_onboard_notifications, name='get_onboard_notifications'),
+    
 ] 

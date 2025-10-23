@@ -27,3 +27,4 @@ sqlparse==0.5.3
 twilio==9.6.2
 tzdata==2025.2
 yarl==1.20.0
+gunicorn==21.2.0

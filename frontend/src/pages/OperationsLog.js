@@ -375,11 +375,11 @@ const OperationsLog = () => {
     }
   }, [filtersApplied, calculateMetricsFromDatabase, processServiceDataForLog]);
 
-  // Process database data for filtered view - USE DATABASE TIMESTAMPS
+  // HONEST Filter Mode: Create representative operations based on real counts
   const processDatabaseDataForFilteredView = useCallback((databaseData, currentFilters) => {
     const operationsFromDatabase = [];
     
-    // Find io service in database data
+    // Find io service to get real operation counts
     const ioService = databaseData.find(service => 
       service.name === 'io' || service.name === 'IO'
     );
@@ -387,45 +387,99 @@ const OperationsLog = () => {
     if (ioService && ioService.operation_counters) {
       const counters = ioService.operation_counters;
       
-      // Create operations based on operation counters
-      // Note: For filtered data, we'll create representative operations
-      // since we don't have individual operation timestamps in counters
+      // Create REPRESENTATIVE operations based on REAL counts
+      // But be HONEST that they're not actual historical records
       
       if (counters.hoist_up_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'hoist-up')) {
         operationsFromDatabase.push({
-          id: `hoist-up-${Date.now()}`,
-          timestamp: formatTimestamp(new Date().toISOString()), // Current time as placeholder
+          id: `hoist-up-rep-${Date.now()}`,
+          timestamp: 'Representative data', // HONEST - not real timestamp
           rawTimestamp: new Date().toISOString(),
           craneId: 'Crane',
           operation: 'hoist-up',
-          duration: '0:00', // Duration not available in counters
-          load: '0 kg', // Load not available in counters
+          duration: 'N/A',
+          load: 'N/A',
           status: 'completed',
-          source: 'database'
+          source: 'representative' // HONEST - not actual historical records
         });
       }
       
       if (counters.hoist_down_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'hoist-down')) {
         operationsFromDatabase.push({
-          id: `hoist-down-${Date.now()}`,
-          timestamp: formatTimestamp(new Date().toISOString()),
+          id: `hoist-down-rep-${Date.now()}`,
+          timestamp: 'Representative data',
           rawTimestamp: new Date().toISOString(),
           craneId: 'Crane',
           operation: 'hoist-down',
-          duration: '0:00',
-          load: '0 kg',
+          duration: 'N/A',
+          load: 'N/A',
           status: 'completed',
-          source: 'database'
+          source: 'representative'
         });
       }
       
-      // Add other operation types similarly...
+      if (counters.ct_forward_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'ct-left')) {
+        operationsFromDatabase.push({
+          id: `ct-left-rep-${Date.now()}`,
+          timestamp: 'Representative data',
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'ct-left',
+          duration: 'N/A',
+          load: 'N/A',
+          status: 'completed',
+          source: 'representative'
+        });
+      }
+      
+      if (counters.ct_backward_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'ct-right')) {
+        operationsFromDatabase.push({
+          id: `ct-right-rep-${Date.now()}`,
+          timestamp: 'Representative data',
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'ct-right',
+          duration: 'N/A',
+          load: 'N/A',
+          status: 'completed',
+          source: 'representative'
+        });
+      }
+      
+      if (counters.lt_forward_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'lt-forward')) {
+        operationsFromDatabase.push({
+          id: `lt-forward-rep-${Date.now()}`,
+          timestamp: 'Representative data',
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'lt-forward',
+          duration: 'N/A',
+          load: 'N/A',
+          status: 'completed',
+          source: 'representative'
+        });
+      }
+      
+      if (counters.lt_backward_count > 0 && (currentFilters.type === 'all' || currentFilters.type === 'lt-reverse')) {
+        operationsFromDatabase.push({
+          id: `lt-reverse-rep-${Date.now()}`,
+          timestamp: 'Representative data',
+          rawTimestamp: new Date().toISOString(),
+          craneId: 'Crane',
+          operation: 'lt-reverse',
+          duration: 'N/A',
+          load: 'N/A',
+          status: 'completed',
+          source: 'representative'
+        });
+      }
     }
     
+    console.log(`📊 Created ${operationsFromDatabase.length} representative operations for filter mode`);
     return operationsFromDatabase;
-  }, [formatTimestamp]);
+  }, []);
 
-  // Load filtered data from database - USE DATABASE TIMESTAMPS
+  // Load filtered data from database - HONEST APPROACH
   const loadFilteredDatabaseData = useCallback(async (currentFilters) => {
     try {
       const response = await fetch('/api/database/services');
@@ -436,10 +490,7 @@ const OperationsLog = () => {
         if (result.success && result.data) {
           console.log('🔍 Loading filtered data from database:', result.data);
           
-          // For filtered mode, we'll use a combination of:
-          // 1. Real operations data we have (with proper timestamps)
-          // 2. Database counters for comprehensive view
-          
+          // For filtered mode, create representative operations based on real counts
           let filteredOperations = [...operationsData];
           
           // Apply type filter if not 'all'
@@ -447,13 +498,13 @@ const OperationsLog = () => {
             filteredOperations = operationsData.filter(op => op.operation === currentFilters.type);
           }
 
-          // If we don't have enough real operations, supplement with database counters
+          // If we don't have enough real operations, supplement with representative data
           if (filteredOperations.length < 5) {
-            const databaseOperations = processDatabaseDataForFilteredView(result.data, currentFilters);
-            filteredOperations = [...filteredOperations, ...databaseOperations];
+            const representativeOperations = processDatabaseDataForFilteredView(result.data, currentFilters);
+            filteredOperations = [...filteredOperations, ...representativeOperations];
           }
 
-          // Sort by timestamp (newest first) and limit to 10
+          // Sort by timestamp and limit to 10
           filteredOperations.sort((a, b) => new Date(b.rawTimestamp) - new Date(a.rawTimestamp));
           
           setFilteredData(filteredOperations.slice(0, 10));
@@ -563,9 +614,10 @@ const OperationsLog = () => {
 
       {filtersApplied && (
         <div className="filter-applied-message">
-          <p>📊 <strong>Filtered Data Mode</strong> - Showing filtered data from database.</p>
-          <p>Current filter: {filters.type === 'all' ? 'All Types' : filters.type}</p>
-          <p>Timestamps from database: Using actual operation timestamps</p>
+          <p>📊 <strong>Filtered Data Mode</strong> - Showing representative operations based on current counts.</p>
+          <p>Filter: {filters.type === 'all' ? 'All Types' : filters.type} | 
+             Date Range: {filters.date}</p>
+          <p>⚠️ <em>Note: Showing operation types that have occurred - timestamps and durations are representative</em></p>
         </div>
       )}
 
